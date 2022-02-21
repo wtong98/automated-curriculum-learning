@@ -37,23 +37,22 @@ class BinaryEnv(gym.Env):
 
 
 class CurriculumEnv(gym.Env):
-    def __init__(self, goal_length, train_iter, 
+    def __init__(self, student, goal_length, train_iter, 
                  p_eps=0.05, 
                  teacher_reward=1,
-                 student_reward=1, 
-                 **student_args) -> None:
+                 student_reward=1):
         super().__init__()
 
+        self.student = student
         self.goal_length = goal_length
         self.train_iter = train_iter
         self.p_eps = p_eps
         self.teacher_reward = teacher_reward
         self.student_reward = student_reward
-        self.student_args = student_args
 
         self.observation_space = gym.spaces.Tuple((
             gym.spaces.Discrete(goal_length), 
-            gym.spaces.Box(low=0, high=1)))
+            gym.spaces.Box(low=0, high=1, shape=(1,))))
         self.N = goal_length
 
         self.action_space = gym.spaces.Discrete(3)
@@ -70,7 +69,8 @@ class CurriculumEnv(gym.Env):
             reward = self.teacher_reward
             is_done = True
         
-        return self.N, reward, is_done, {}
+        prob = self._get_score(self.N)
+        return (self.N, prob), reward, is_done, {}
     
     def reset(self):
         student_score = self._get_score(self.goal_length)
@@ -78,7 +78,6 @@ class CurriculumEnv(gym.Env):
         return (self.goal_length, student_score)
 
     def _get_score(self, length):
-        agent = Student(**self.student_args)
-        agent.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
-        return agent.score(length)
+        self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
+        return self.student.score(length)
     
