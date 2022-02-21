@@ -4,8 +4,11 @@ Teacher and student agents
 author: William Tong (wtong@g.harvard.edu)
 """
 
+# <codecell>
+
 from collections import defaultdict
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 def sigmoid(x):
@@ -22,7 +25,7 @@ class Agent:
 
 
 class Student(Agent):
-    def __init__(self, lr, gamma=1, q_e=None) -> None:
+    def __init__(self, lr=0.1, gamma=1, q_e=None) -> None:
         super().__init__()
         self.lr = lr
         self.gamma = gamma
@@ -45,3 +48,24 @@ class Student(Agent):
         _, prob = self.policy(next_state)
         exp_q = prob * self.q_r[next_state]
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
+    
+    def learn(self, env: 'BinaryEnv', max_iters=1000, post_hook=None):
+        state = env.reset()
+
+        for _ in range(max_iters):
+            action = self.next_action(state)
+            next_state, reward, is_done, _ = env.step(action)
+            self.update(state, reward, next_state)
+
+            if post_hook != None:
+                post_hook(self)
+
+            if is_done:
+                state = env.reset()
+            else:
+                state = next_state
+
+    def score(self, goal_state) -> float:
+        qs = [self.q_e[s] + self.q_r[s] for s in range(goal_state)]
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in qs])
+        return log_prob

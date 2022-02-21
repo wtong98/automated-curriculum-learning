@@ -5,6 +5,9 @@ author: William Tong (wtong@g.harvard.edu)
 """
 
 import gym
+import numpy as np
+
+from agent import Student
 
 class BinaryEnv(gym.Env):
     def __init__(self, length, reward=1) -> None:
@@ -33,16 +36,49 @@ class BinaryEnv(gym.Env):
         return 0
 
 
-# TODO: flesh out curriculum dynamics
 class CurriculumEnv(gym.Env):
-    def __init__(self) -> None:
+    def __init__(self, goal_length, train_iter, 
+                 p_eps=0.05, 
+                 teacher_reward=1,
+                 student_reward=1, 
+                 **student_args) -> None:
         super().__init__()
 
-        self.observation_space = None
-        self.action_space = None
+        self.goal_length = goal_length
+        self.train_iter = train_iter
+        self.p_eps = p_eps
+        self.teacher_reward = teacher_reward
+        self.student_reward = student_reward
+        self.student_args = student_args
+
+        self.observation_space = gym.spaces.Tuple((
+            gym.spaces.Discrete(goal_length), 
+            gym.spaces.Box(low=0, high=1)))
+        self.N = goal_length
+
+        self.action_space = gym.spaces.Discrete(3)
     
     def step(self, action):
-        return None, None, None, {}
+        d_length = action - 1
+        self.N = np.clip(self.N + d_length, 0, self.goal_length)
+        prob = self._get_score(self.N)
+
+        reward = 0
+        is_done = False
+
+        if self.N == self.goal_length and (1 - prob) < self.p_eps:
+            reward = self.teacher_reward
+            is_done = True
+        
+        return self.N, reward, is_done, {}
     
     def reset(self):
-        return None
+        student_score = self._get_score(self.goal_length)
+        self.N  = self.goal_length
+        return (self.goal_length, student_score)
+
+    def _get_score(self, length):
+        agent = Student(**self.student_args)
+        agent.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
+        return agent.score(length)
+    
