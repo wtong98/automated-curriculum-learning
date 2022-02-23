@@ -4,6 +4,7 @@ Simple binary environments for experimenting with teacher-student interactions
 author: William Tong (wtong@g.harvard.edu)
 """
 
+# <codecell>
 import gym
 import numpy as np
 
@@ -21,13 +22,16 @@ class BinaryEnv(gym.Env):
         self.loc = 0
     
     def step(self, action):
-        self.loc += action
         reward = 0
         is_done = False
 
-        if self.loc == self.length:
-            reward = self.reward
+        if action == 0:
             is_done = True
+        else:
+            self.loc += action
+            if self.loc == self.length:
+                reward = self.reward
+                is_done = True
             
         return self.loc, reward, is_done, {}
     
@@ -37,13 +41,14 @@ class BinaryEnv(gym.Env):
 
 
 class CurriculumEnv(gym.Env):
-    def __init__(self, student, goal_length, train_iter, 
+    def __init__(self, goal_length, train_iter, 
                  p_eps=0.05, 
                  teacher_reward=1,
-                 student_reward=1):
+                 student_reward=1,
+                 **student_args):
         super().__init__()
 
-        self.student = student
+        self.student = None
         self.goal_length = goal_length
         self.train_iter = train_iter
         self.p_eps = p_eps
@@ -56,11 +61,12 @@ class CurriculumEnv(gym.Env):
         self.N = goal_length
 
         self.action_space = gym.spaces.Discrete(3)
+        self.student_args = student_args
     
     def step(self, action):
         d_length = action - 1
-        self.N = np.clip(self.N + d_length, 0, self.goal_length)
-        prob = self._get_score(self.N)
+        self.N = np.clip(self.N + d_length, 1, self.goal_length)
+        prob = np.exp(self._get_score(self.N))
 
         reward = 0
         is_done = False
@@ -73,6 +79,7 @@ class CurriculumEnv(gym.Env):
         return (self.N, prob), reward, is_done, {}
     
     def reset(self):
+        self.student = Student(**self.student_args)
         student_score = self._get_score(self.goal_length)
         self.N  = self.goal_length
         return (self.goal_length, student_score)

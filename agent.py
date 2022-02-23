@@ -23,21 +23,23 @@ class Agent:
     def next_action(state):
         raise NotImplementedError('next_action not implemented in Agent')
 
-    def update(old_state, reward, next_state):
+    def update(old_state, action, reward, next_state):
         raise NotImplementedError('update not implemented in Agent')
     
-    def learn(self, env, max_iters=1000, post_hook=None):
+    def learn(self, env, max_iters=1000, post_hook=None, done_hook=None):
         state = env.reset()
 
         for _ in range(max_iters):
             action = self.next_action(state)
             next_state, reward, is_done, _ = env.step(action)
-            self.update(state, reward, next_state)
+            self.update(state, action, reward, next_state)
 
             if post_hook != None:
                 post_hook(self)
 
             if is_done:
+                if done_hook != None:
+                    done_hook(self)
                 state = env.reset()
             else:
                 state = next_state
@@ -63,7 +65,7 @@ class Student(Agent):
         _, prob = self.policy(state)
         return np.random.binomial(n=1, p=prob)
     
-    def update(self, old_state, reward, next_state):
+    def update(self, old_state, _, reward, next_state):
         _, prob = self.policy(next_state)
         exp_q = prob * self.q_r[next_state]
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
@@ -98,12 +100,12 @@ class Teacher(Agent):
         probs = self.policy(state)
         return np.random.choice([0, 1, 2], p=probs)
 
-    def update(self, old_state, reward, next_state):
+    def update(self, old_state, action, reward, next_state):
         old_state = self._to_bin(old_state)
         next_state = self._to_bin(next_state)
 
         probs = self.policy(next_state)
         qs = np.array([self.q[next_state, a] for a in [0, 1, 2]])
         exp_q = np.sum(probs * qs)
-        self.q[old_state] += self.lr * (reward + self.gamma * exp_q - self.q[old_state])
+        self.q[old_state, action] += self.lr * (reward + self.gamma * exp_q - self.q[old_state, action])
 
