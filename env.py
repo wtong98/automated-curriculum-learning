@@ -5,6 +5,7 @@ author: William Tong (wtong@g.harvard.edu)
 """
 
 # <codecell>
+from collections import defaultdict
 import gym
 import numpy as np
 
@@ -45,6 +46,7 @@ class CurriculumEnv(gym.Env):
                  p_eps=0.05, 
                  teacher_reward=1,
                  student_reward=1,
+                 student_qe_dist=None,
                  **student_args):
         super().__init__()
 
@@ -54,6 +56,7 @@ class CurriculumEnv(gym.Env):
         self.p_eps = p_eps
         self.teacher_reward = teacher_reward
         self.student_reward = student_reward
+        self.student_qe_dist = student_qe_dist
 
         self.observation_space = gym.spaces.Tuple((
             gym.spaces.Discrete(goal_length), 
@@ -79,7 +82,13 @@ class CurriculumEnv(gym.Env):
         return (self.N, prob), reward, is_done, {}
     
     def reset(self):
-        self.student = Student(**self.student_args)
+        if self.student_qe_dist == None:
+            self.student = Student(**self.student_args)
+        else:
+            qe_val = self.student_qe_dist()
+            q_e = defaultdict(lambda: qe_val)
+            self.student = Student(q_e=q_e, **self.student_args)
+
         student_score = self._get_score(self.goal_length)
         self.N  = self.goal_length
         return (self.goal_length, student_score)

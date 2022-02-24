@@ -11,93 +11,127 @@ import numpy as np
 from agent import Student, Teacher
 from env import BinaryEnv, CurriculumEnv
 
-# <codecell>
-# Scratch routine to train student
+def plot_path(path, completions):
+    fig, axs = plt.subplots(2, 1, figsize=(8, 5))
 
-N = 6
-agent = Student(lr=0.1)
-scores = []
-qs = []
-max_iters = 100
+    axs[0].plot(path[:,0])
+    for c in completions:
+        if c == completions[0]:
+            axs[0].axvline(x=c, color='red', alpha=0.3, label='Episode boundary')
+        else:
+            axs[0].axvline(x=c, color='red', alpha=0.3)
 
-def log(agent):
-    scores.append(agent.score(N))
-    qs.append(agent.q_r)
+    axs[0].set_title('Teacher')
+    axs[0].set_xlabel('time')
+    axs[0].set_ylabel('N')
+    axs[0].legend()
 
-agent.learn(BinaryEnv(N, reward=10), max_iters=max_iters, post_hook=log)
-print('done')
+    axs[1].plot(path[:,1])
+    for c in completions:
+        if c == completions[0]:
+            axs[1].axvline(x=c, color='red', alpha=0.3, label='Episode boundary')
+        else:
+            axs[1].axvline(x=c, color='red', alpha=0.3)
 
-# %%
-plt.plot(scores)
-# %%
-plt.bar([0,1,2,3,4,5], height=list(qs[-1].values()))
+    axs[1].set_title('Student')
+    axs[1].set_xlabel('time')
+    axs[1].set_ylabel('Log prob')
+    axs[1].legend()
 
-# <codecell> IMPROMPTU TEACHER TESTING
-teacher = Teacher()
-N = 6
-T = 100
+    fig.tight_layout()
+    # plt.savefig('fig/teacher_student_paths.png')
+
+# <codecell> TEACHER TESTING
+N = 10
+T = 20
+max_iters = 100000
+eval_every = 1000
+eval_len = 100
+
+p_eps=0.1
+teacher_reward=100
+student_reward=100
+qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
+qe_gen = None
+
+def anneal_sched(i): 
+    end_inv_temp = 2
+    return (i / max_iters) * end_inv_temp
+
+bins = 20
+teacher = Teacher(bins=bins, anneal_sched=anneal_sched)
 
 i = 0
 
 path = []
-completions = []
+global_completions = []
 
+avg_rewards = []
+paths = []
+comps = []
+qs = []
 def log(teacher):
     global i
     i += 1
-    path.append((env.N, env.student.score(env.N)))
+
+    if i % eval_every == 0:
+        eval_env = CurriculumEnv(N, T, 
+            p_eps=p_eps, 
+            student_reward=student_reward, teacher_reward=teacher_reward, 
+            student_qe_dist=qe_gen)
+
+        state = eval_env.reset()
+
+        rewards = 0
+        path = [state]
+        completions = []
+        for i in range(eval_len):
+            a = teacher.next_action(state)
+            state, reward, is_done, _ = eval_env.step(a)
+            rewards += reward
+
+            path.append(state)
+            if is_done:
+                completions.append(i+1)
+                state = eval_env.reset()
+
+        avg_rewards.append(rewards / eval_len)
+        paths.append(path)
+        comps.append(completions)
+        qs.append(teacher.q.copy())
+        
 
 def done(teacher):
     global i
-    completions.append(i-1)
+    global_completions.append(i-1)
 
-env = CurriculumEnv(N, T, p_eps=0.1, teacher_reward=10, student_reward=10)
-teacher.learn(env, max_iters=100, post_hook=log, done_hook=done)
+env = CurriculumEnv(N, T, 
+    p_eps=p_eps, teacher_reward=teacher_reward, student_reward=student_reward, 
+    student_qe_dist=qe_gen)
+teacher.learn(env, max_iters=max_iters, use_tqdm=True, post_hook=log, done_hook=done)
 
 path = np.array(path)
 print('done!')
 
-# TODO: debug teacher / get q-values > 0
-# TODO: reset student after successful episode
-# %%
-fig, axs = plt.subplots(2, 1, figsize=(8, 5))
+# <codecell>
+plt.plot([anneal_sched(i) for i in range(max_iters)])
 
-axs[0].plot(path[:,0])
-for c in completions:
-    if c == completions[0]:
-        axs[0].axvline(x=c, color='red', alpha=0.3, label='Episode boundary')
-    else:
-        axs[0].axvline(x=c, color='red', alpha=0.3)
-
-axs[0].set_title('Teacher')
-axs[0].set_xlabel('time')
-axs[0].set_ylabel('N')
-axs[0].legend()
-
-axs[1].plot(path[:,1])
-for c in completions:
-    if c == completions[0]:
-        axs[1].axvline(x=c, color='red', alpha=0.3, label='Episode boundary')
-    else:
-        axs[1].axvline(x=c, color='red', alpha=0.3)
-
-axs[1].set_title('Student')
-axs[1].set_xlabel('time')
-axs[1].set_ylabel('Log prob')
-axs[1].legend()
-
-fig.tight_layout()
-plt.savefig('fig/teacher_train.png')
+# <codecell>
+plt.plot(avg_rewards, '--o')
 
 # %%
-plt.plot(path[:,1])
+paths = np.array(paths)
+comps = np.array(comps)
+
+idx=-1
+plot_path(paths[idx], comps[idx])
 
 # %%
 def _make_heatmap(action_idx):
     im = np.zeros((N, 21))
 
     for i, row in enumerate(np.arange(N) + 1):
-        for j, col in enumerate(np.arange(0, 1.01, step=0.05)):
+        for j, col in enumerate(np.arange(1, teacher.bins + 1)):
             im[i, j] = teacher.q[(row, col), action_idx]
     
     return im
@@ -119,5 +153,34 @@ plt.savefig('fig/teacher_q.png')
 
 
 # %%
+### PLOT PHASE DIAGRAM OF STRATEGY
+ns = np.arange(N) + 1
+ls = np.arange(0, teacher.bins + 1)
+
+ll, nn = np.meshgrid(ls, ns)
+actions = []
+
+for l, n in zip(ll.ravel(), nn.ravel()):
+    a = teacher.next_action((n, l), is_binned=True)  # TODO: actually already a bin state (deal only on bin states)
+    actions.append(a)
+
+z = np.array(actions).reshape(ll.shape) - 1
+# plt.contourf(ll, nn, z)
+plt.imshow(z)
+plt.colorbar()
 
 # %%
+### ENTROPY OF STRAT
+entropy = []
+
+for l, n in zip(ll.ravel(), nn.ravel()):
+    probs = teacher.policy((n, l))
+    entropy.append(-np.log(np.max(probs)))
+
+z = np.array(entropy).reshape(ll.shape)
+# plt.contourf(ll, nn, z)
+plt.imshow(z)
+plt.colorbar()
+
+# TODO: report patchy results to Gautam <-- STOPPED HERE
+# (agent prefers to alternate rather than stay still)
