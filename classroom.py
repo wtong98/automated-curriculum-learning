@@ -10,8 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from agent import Student, Teacher
-from env import BinaryEnv, CurriculumEnv
+from env import CurriculumEnv, Teacher
 
 def plot_path(path, completions):
     fig, axs = plt.subplots(2, 1, figsize=(8, 5))
@@ -183,7 +182,7 @@ ll, nn = np.meshgrid(ls, ns)
 actions = []
 
 for l, n in zip(ll.ravel(), nn.ravel()):
-    a = teacher.next_action((n, l), is_binned=True)  # TODO: actually already a bin state (deal only on bin states)
+    a = teacher.next_action((n, l), is_binned=True)
     actions.append(a)
 
 z = np.array(actions).reshape(ll.shape) - 1
