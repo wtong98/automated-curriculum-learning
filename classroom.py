@@ -57,10 +57,10 @@ def plot_path_curve(path, completions):
 
 
 
-# <codecell> TEACHER TESTING
+# <codecell> TEACHER TRAINING
 N = 10
 T = 20
-max_iters = 100000
+max_iters = 50000
 eval_every = 1000
 eval_len = 200
 
@@ -74,7 +74,7 @@ def anneal_sched(i):
     end_inv_temp = 10
     return (i / max_iters) * end_inv_temp
 
-bins = 20
+bins = 5
 teacher = Teacher(bins=bins, anneal_sched=anneal_sched)
 
 i = 0
@@ -132,11 +132,10 @@ print('done!')
 
 
 # <codecell>
-# TODO: run experiment with heuristic and naive, compare results <-- STOPPED HERE
 plt.plot(avg_time_to_comp, '--o')
 plt.title('Average time to completion')
 plt.xlabel('Time')
-plt.ylabel('Reward')
+plt.ylabel('Iterations')
 plt.savefig('fig/teacher_average_ttc.png')
 
 # %%
@@ -149,7 +148,7 @@ plot_path(paths[idx], comps[idx])
 
 # %%
 def _make_heatmap(action_idx):
-    im = np.zeros((N, 21))
+    im = np.zeros((N, bins))
 
     for i, row in enumerate(np.arange(N) + 1):
         for j, col in enumerate(np.arange(1, teacher.bins + 1)):

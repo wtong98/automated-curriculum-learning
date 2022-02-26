@@ -142,6 +142,7 @@ class Agent:
             self.iter += 1
 
 
+# TODO: include score as observed number of successes
 class Student(Agent):
     def __init__(self, lr=0.1, gamma=1, q_e=None) -> None:
         super().__init__()
@@ -182,8 +183,8 @@ class Teacher(Agent):
 
         self.lr = lr
         self.gamma = gamma
-        # self.q = defaultdict(int)
-        self.q = {((n, l), a):0 for n in np.arange(1, 11) for l in np.arange(0, bins + 1) for a in [0, 1, 2]}
+        self.q = defaultdict(int)
+        # self.q = {((n, l), a):0 for n in np.arange(1, 11) for l in np.arange(0, bins + 1) for a in [0, 1, 2]}
         self.bins = bins
         self.anneal_sched = anneal_sched
     
@@ -232,186 +233,3 @@ class Teacher(Agent):
             exp_q = np.sum(probs * qs)
 
         self.q[old_state, action] += self.lr * (reward + self.gamma * exp_q - self.q[old_state, action])
-    
-
-class NaiveTest:
-    def __init__(self, goal_length):
-        self.goal_length = goal_length
-    
-    def run(self, student, T, max_iters=1000, student_reward=1):
-        self.iter = 0
-
-        for _ in range(max_iters):
-            student.learn(BinaryEnv(self.goal_length, reward=student_reward), max_iters=T)
-            self.iter += 1
-
-            final_score = student.score(self.goal_length)
-            if np.isclose(final_score, 0, atol=1e-1):
-                break
-        
-        return self.iter
-
-
-class TeacherHeuristicTest:
-    def __init__(self, goal_length, lr=0.1) -> None:
-        self.q = np.zeros(goal_length)
-        self.lr = lr
-
-    # softmax policy
-    def policy(self) -> np.ndarray:
-        probs = np.exp(self.q) / np.sum(np.exp(self.q))
-        return probs
-    
-    def next_action(self):
-        probs = self.policy()
-        return np.random.choice(len(probs), p=probs)
-
-    def update(self, state, reward):
-        self.q[state] = self.lr * reward + (1 - self.lr) * self.q[state]
-    
-    def run(self, student, T, max_iters=1000, student_reward=1, scale=100):
-        self.iter = 0
-
-        for _ in range(max_iters):
-            N = self.next_action() + 1
-            scores = []
-            student.learn(BinaryEnv(N, reward=student_reward), max_iters=T, 
-                          post_hook=lambda s: scores.append(s.score(N)))
-            
-            slope, _, _, _, _ = linregress(np.arange(len(scores)), scores)
-            slope *= scale
-            self.update(N - 1, np.abs(slope))
-            self.iter += 1
-
-            final_score = student.score(len(self.q))
-            if np.isclose(final_score, 0, atol=1e-1):
-                break
-        
-        return self.iter
-
-
-class TeacherAgentTest:
-    def __init__(self, teacher_agent, goal_length):
-        self.teacher = teacher_agent
-        self.goal_length = goal_length
-    
-    def run(self, student, T, max_iters=1000, student_reward=1):
-        self.iter = 0
-        N = self.goal_length
-
-        for _ in range(max_iters):
-            log_p = student.score(N)
-            a = teacher.next_action((N, log_p)) - 1
-            N = np.clip(N + a, 1, self.goal_length)
-            print(N)
-            student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
-            self.iter += 1
-
-            final_score = student.score(self.goal_length)
-            if np.isclose(final_score, 0, atol=1e-1):
-                break
-        
-        return self.iter
-
-
-'''
-
-# <codecell>
-# teacher = TeacherHeuristic(10)
-# student = Student()
-# iters = teacher.learn(student, 20, max_iters=1000, student_reward=10)
-
-# teacher = NaiveTest(10)
-test = TeacherHeuristicTest(10)
-student = Student()
-iters = test.run(student, 20, max_iters=10000, student_reward=10)
-
-print(iters)
-
-# %%
-
-student = Student()
-scores = []
-student.learn(BinaryEnv(10, reward=10), max_iters=1100 * 20, post_hook=lambda s: scores.append(s.score(10)))
-# %%
-import matplotlib.pyplot as plt
-plt.plot(scores)
-# %%
-N = 10
-T = 20
-max_iters = 100000
-eval_every = 1000
-eval_len = 200
-
-p_eps=0.1
-teacher_reward=10
-student_reward=10
-qe_gen = lambda: np.random.normal(loc=0, scale=1)
-qe_gen = None
-
-def anneal_sched(i): 
-    end_inv_temp = 10
-    return (i / max_iters) * end_inv_temp
-
-bins = 20
-teacher = Teacher(bins=bins, anneal_sched=anneal_sched)
-
-i = 0
-
-path = []
-global_completions = []
-
-avg_time_to_comp = []
-paths = []
-comps = []
-qs = []
-def log(teacher):
-    global i
-    i += 1
-
-    if i % eval_every == 0:
-        eval_env = CurriculumEnv(N, T, 
-            p_eps=p_eps, 
-            student_reward=student_reward, teacher_reward=teacher_reward, 
-            student_qe_dist=qe_gen)
-
-        state = eval_env.reset()
-
-        rewards = 0
-        path = [teacher._to_bin(state)]
-        completions = []
-        for i in range(eval_len):
-            a = teacher.next_action(state)
-            state, reward, is_done, _ = eval_env.step(a)
-            rewards += reward
-
-            path.append(teacher._to_bin(state))
-            if is_done:
-                completions.append(i+1)
-                state = eval_env.reset()
-
-        total_time = completions[-1] if len(completions) > 0 else 0
-        avg_time_to_comp.append(total_time / (len(completions) + 1e-8))
-        paths.append(path)
-        comps.append(completions)
-        qs.append(teacher.q.copy())
-        
-
-def done(teacher):
-    global i
-    global_completions.append(i-1)
-
-env = CurriculumEnv(N, T, 
-    p_eps=p_eps, teacher_reward=teacher_reward, student_reward=student_reward, 
-    student_qe_dist=qe_gen)
-teacher.learn(env, max_iters=max_iters, use_tqdm=True, post_hook=log, done_hook=done)
-
-path = np.array(path)
-print('done!')
-# %%
-# TODO: debug possible issues and make comparison plots
-test = TeacherAgentTest(teacher, 10)
-student = Student()
-iters = test.run(student, T, max_iters=10000, student_reward=student_reward)
-print(iters)
-'''
