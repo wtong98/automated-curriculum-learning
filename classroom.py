@@ -118,7 +118,7 @@ def log(teacher):
         qs.append(teacher.q.copy())
         
 
-def done(teacher):
+def done(teacher, reward):
     global i
     global_completions.append(i-1)
 

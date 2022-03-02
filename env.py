@@ -95,7 +95,7 @@ class CurriculumEnv(gym.Env):
             self.student = Student(q_e=q_e, **self.student_args)
 
         student_score = self._get_score(self.goal_length)
-        self.N  = self.goal_length
+        self.N  = 1
         return (self.goal_length, student_score)
 
     def _get_score(self, length):
@@ -113,7 +113,7 @@ class Agent:
     def update(old_state, action, reward, next_state, is_done):
         raise NotImplementedError('update not implemented in Agent')
     
-    def learn(self, env, 
+    def learn(self, env, is_eval=False,
              max_iters=1000, 
              use_tqdm=False, 
              post_hook=None, done_hook=None):
@@ -127,14 +127,15 @@ class Agent:
         for _ in iterator:
             action = self.next_action(state)
             next_state, reward, is_done, _ = env.step(action)
-            self.update(state, action, reward, next_state, is_done)
+            if not is_eval:
+                self.update(state, action, reward, next_state, is_done)
 
             if post_hook != None:
                 post_hook(self)
 
             if is_done:
                 if done_hook != None:
-                    done_hook(self)
+                    done_hook(self, reward)
                 state = env.reset()
             else:
                 state = next_state
@@ -233,3 +234,8 @@ class Teacher(Agent):
             exp_q = np.sum(probs * qs)
 
         self.q[old_state, action] += self.lr * (reward + self.gamma * exp_q - self.q[old_state, action])
+
+# <codecell>
+# student = Student()
+# student.learn(BinaryEnv(5), is_eval=False)
+# %%

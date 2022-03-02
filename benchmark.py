@@ -12,14 +12,16 @@ from tqdm import tqdm
 from env import BinaryEnv, Student, Teacher, CurriculumEnv
 
 class NoTeacherTest:
-    def __init__(self, goal_length):
+    def __init__(self, goal_length, k=1):
         self.goal_length = goal_length
+        self.k = k
     
     def run(self, student, T, max_iters=1000, student_reward=1):
         self.iter = 0
 
         for _ in range(max_iters):
-            student.learn(BinaryEnv(self.goal_length, reward=student_reward), max_iters=T)
+            for _ in range(self.k):
+                student.learn(BinaryEnv(self.goal_length, reward=student_reward), max_iters=T)
             self.iter += 1
 
             final_score = student.score(self.goal_length)
@@ -30,15 +32,17 @@ class NoTeacherTest:
 
 
 class NaiveTest:
-    def __init__(self, goal_length):
+    def __init__(self, goal_length, k=1):
         self.goal_length = goal_length
+        self.k = k
     
     def run(self, student, T, max_iters=1000, student_reward=1):
         self.iter = 0
 
         for _ in range(max_iters):
             n = np.random.choice(self.goal_length) + 1
-            student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
+            for _ in range(self.k):
+                student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
             self.iter += 1
 
             final_score = student.score(self.goal_length)
@@ -49,15 +53,17 @@ class NaiveTest:
 
 
 class IncrementalTest:
-    def __init__(self, goal_length):
+    def __init__(self, goal_length, k=1):
         self.goal_length = goal_length
+        self.k = k
     
     def run(self, student, T, max_iters=1000, student_reward=1):
         self.iter = 0
 
         n = 1
         for _ in range(max_iters):
-            student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
+            for _ in range(self.k):
+                student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
             
             curr_score = student.score(n)
             if np.isclose(curr_score, 0, atol=1e-1):
@@ -104,15 +110,25 @@ class TeacherHeuristicTest:
             N = self.next_action() + 1
             all_steps.append(N)
 
-            curr_scores = []
+            scores = []
             for _ in range(self.k):
-                scores = []
-                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T, 
-                            post_hook=lambda s: scores.append(s.score(N)))
-                curr_scores.extend(enumerate(scores))
+                # student.learn(BinaryEnv(N, reward=student_reward), max_iters=T, 
+                #             post_hook=lambda s: scores.append(s.score(N)))
+                total_comp = 0
+                success_comp = 0
+                def done(student, reward):
+                    nonlocal total_comp, success_comp
+                    if reward > 0:
+                        success_comp += 1
+                    total_comp += 1
+
+                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T,
+                              done_hook=done)
+                
+                ratio = success_comp / total_comp if total_comp > 0 else 0
+                scores.append(ratio)
             
-            x, y = zip(*curr_scores)
-            slope, _, _, _, _ = linregress(x, y)
+            slope, _, _, _, _ = linregress(np.arange(len(scores)), scores)
             slope *= scale
             self.update(N - 1, slope)
             self.iter += 1
@@ -167,13 +183,14 @@ plt.savefig('fig/acl_heuristic_learning_curves.png')
 # <codecell>
 
 class TeacherAgentTest:
-    def __init__(self, teacher_agent, goal_length):
+    def __init__(self, teacher_agent, goal_length, k=1):
         self.teacher = teacher_agent
         self.goal_length = goal_length
+        self.k = k
     
     def run(self, student, T, max_iters=1000, student_reward=1):
         self.iter = 0
-        N = self.goal_length
+        N = 1
 
         all_steps = []
         for _ in range(max_iters):
@@ -182,7 +199,9 @@ class TeacherAgentTest:
             N = np.clip(N + a, 1, self.goal_length)
             all_steps.append(N)
 
-            student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
+            for _ in range(self.k):
+                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
+
             self.iter += 1
 
             final_score = student.score(self.goal_length)
@@ -256,7 +275,7 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
                 rewards += reward
 
                 path.append(teacher._to_bin(state))
-                if is_done:
+                if is_done and reward > 0:
                     completions.append(i+1)
                     state = eval_env.reset()
 
@@ -311,6 +330,7 @@ plt.savefig('fig/teacher_average_ttc.png')
 # <codecell>
 ### GATHER PERFORMANCE METRICS
 iters = 50
+K = 5
 
 naive_scores = []
 inc_scores = []
@@ -318,10 +338,10 @@ heuristic_scale_100_scores = []
 heuristic_no_scale_scores = []
 agent_scores = []
 
-naive_test = NaiveTest(N)
-inc_test = IncrementalTest(N)
+naive_test = NaiveTest(N, k=K)
+inc_test = IncrementalTest(N, k=K)
 heuristic_test = TeacherHeuristicTest(N, k=5)
-agent_test = TeacherAgentTest(results['teacher'], N)
+agent_test = TeacherAgentTest(results['teacher'], N, k=K)
 
 for _ in tqdm(range(iters)):
     naive_scores.append(
@@ -339,7 +359,7 @@ for _ in tqdm(range(iters)):
         heuristic_test.run(Student(), T, max_iters=10000, student_reward=student_reward, scale=100)[0])
 
     agent_scores.append(agent_test.run(
-        Student(), T, max_iters=10000, student_reward=student_reward))
+        Student(), T, max_iters=10000, student_reward=student_reward)[0])
 
 # %%
 all_scores = [
@@ -358,7 +378,7 @@ labels = [
 ]
 
 plt.gcf().set_size_inches(10, 4)
-plt.title('Average number of iterations to train a student')
+plt.title('Average number of iterations to train a student (k = 5)')
 plt.ylabel('Iterations')
 
 all_means = [np.mean(score) for score in all_scores]
