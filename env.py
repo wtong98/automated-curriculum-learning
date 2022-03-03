@@ -83,8 +83,8 @@ class CurriculumEnv(gym.Env):
             reward = self.teacher_reward
             is_done = True
         
-        prob = self._get_score(self.N)
-        return (self.N, prob), reward, is_done, {}
+        log_prob = self._get_score(self.N)
+        return (self.N, log_prob), reward, is_done, {}
     
     def reset(self):
         if self.student_qe_dist == None:

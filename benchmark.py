@@ -61,6 +61,7 @@ class IncrementalTest:
         self.iter = 0
 
         n = 1
+        all_steps = [n]
         for _ in range(max_iters):
             for _ in range(self.k):
                 student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
@@ -69,13 +70,14 @@ class IncrementalTest:
             if np.isclose(curr_score, 0, atol=1e-1):
                 n += 1
 
+            all_steps.append(n)
             final_score = student.score(self.goal_length)
             if np.isclose(final_score, 0, atol=1e-1):
                 break
             
             self.iter += 1
 
-        return self.iter
+        return self.iter, all_steps
 
 
 class TeacherHeuristicTest:
@@ -143,44 +145,6 @@ class TeacherHeuristicTest:
         
         return self.iter, all_scores, all_probs, all_steps
 
-# <codecell>
-## HEURISTIC DIAGNOSTICS
-N = 10
-T = 20
-student_reward=10
-
-all_steps_heuristic = []
-
-for _ in range(5):
-    test = TeacherHeuristicTest(N, k=5)
-    iters, scores, probs, steps_heur = test.run(
-        Student(), T, max_iters=10000, student_reward=student_reward, scale=1)
-    
-    all_steps_heuristic.append(steps_heur)
-
-scores = np.array(scores).T
-probs = np.array(probs).T
-
-# <codecell>
-fig, axs = plt.subplots(1, 2, figsize=(11, 4))
-
-for i, (score, prob) in enumerate(zip(scores, probs)):
-    axs[0].plot(score, label=f'N={i+1}')
-    axs[0].set_title('Score')
-
-    axs[1].plot(prob, label=f'N={i+1}')
-    axs[1].set_title('Probability of selecting task')
-
-axs[0].legend()
-axs[1].legend()
-
-fig.suptitle('Learning curves for each task (scale=1)')
-fig.tight_layout()
-
-plt.savefig('fig/acl_heuristic_learning_curves.png')
-
-
-# <codecell>
 
 class TeacherAgentTest:
     def __init__(self, teacher_agent, goal_length, k=1):
@@ -192,15 +156,15 @@ class TeacherAgentTest:
         self.iter = 0
         N = 1
 
-        all_steps = []
+        all_steps = [N]
         for _ in range(max_iters):
+            for _ in range(self.k):
+                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
+
             log_p = student.score(N)
             a = self.teacher.next_action((N, log_p)) - 1
             N = np.clip(N + a, 1, self.goal_length)
             all_steps.append(N)
-
-            for _ in range(self.k):
-                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
 
             self.iter += 1
 
@@ -210,34 +174,6 @@ class TeacherAgentTest:
         
         return self.iter, all_steps
 
-# <codecell>
-all_steps_agent = []
-for _ in range(5):
-    iters, steps_agent = TeacherAgentTest(results['teacher'], 10).run(Student(), 20, max_iters=1000, student_reward=10)
-    all_steps_agent.append(steps_agent)
-
-# <codecell>
-for i, steps in enumerate(all_steps_heuristic):
-    if i == 0:
-        plt.plot(steps, label='Heuristic', alpha=0.6, color='C0')
-    else:
-        plt.plot(steps, alpha=0.6, color='C0')
-
-for i, steps in enumerate(all_steps_agent):
-    if i == 0:
-        plt.plot(steps, label='Agent', alpha=0.6, color='C1')
-    else:
-        plt.plot(steps, alpha=0.6, color='C1')
-
-
-
-plt.title('Steps taken')
-plt.xlabel('Iteration')
-plt.ylabel('N')
-plt.legend()
-plt.savefig('fig/acl_steps_taken.png')
-
-# <codecell>
 
 def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
                   teacher_reward=10, student_reward=10,
@@ -324,7 +260,7 @@ results = train_teacher(N=N, T=T ,max_iters=max_iters, anneal_sched=anneal_sched
 plt.plot(results['avg_time_to_comp'], '--o')
 plt.title('Average time to completion')
 plt.xlabel('Time')
-plt.ylabel('Reward')
+plt.ylabel('Iterations')
 plt.savefig('fig/teacher_average_ttc.png')
 
 # <codecell>
@@ -341,14 +277,14 @@ agent_scores = []
 naive_test = NaiveTest(N, k=K)
 inc_test = IncrementalTest(N, k=K)
 heuristic_test = TeacherHeuristicTest(N, k=5)
-agent_test = TeacherAgentTest(results['teacher'], N, k=K)
+agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
 for _ in tqdm(range(iters)):
     naive_scores.append(
         naive_test.run(Student(), T, max_iters=10000, student_reward=student_reward))
 
     inc_scores.append(
-        inc_test.run(Student(), T, max_iters=10000, student_reward=student_reward))
+        inc_test.run(Student(), T, max_iters=10000, student_reward=student_reward)[0])
 
     heuristic_no_scale_scores.append(heuristic_test.run(
         Student(), T, max_iters=10000, student_reward=student_reward, scale=1)[0])
@@ -435,4 +371,81 @@ plt.xlabel('Number of bins')
 plt.ylabel('Iterations')
 plt.savefig('fig/acl_method_comparison_varying_bins.png')
 
-# %%
+
+# <codecell>
+##### HEURISTIC DIAGNOSTICS
+N = 10
+T = 20
+student_reward=10
+
+all_steps_heuristic = []
+
+for _ in range(5):
+    test = TeacherHeuristicTest(N, k=5)
+    iters, scores, probs, steps_heur = test.run(
+        Student(), T, max_iters=10000, student_reward=student_reward, scale=1)
+    
+    all_steps_heuristic.append(steps_heur)
+
+scores = np.array(scores).T
+probs = np.array(probs).T
+
+# <codecell>
+fig, axs = plt.subplots(1, 2, figsize=(11, 4))
+
+for i, (score, prob) in enumerate(zip(scores, probs)):
+    axs[0].plot(score, label=f'N={i+1}')
+    axs[0].set_title('Score')
+
+    axs[1].plot(prob, label=f'N={i+1}')
+    axs[1].set_title('Probability of selecting task')
+
+axs[0].legend()
+axs[1].legend()
+
+fig.suptitle('Learning curves for each task (scale=1)')
+fig.tight_layout()
+
+plt.savefig('fig/acl_heuristic_learning_curves.png')
+
+
+# <codecell>
+####### COMPARING STEPS
+# TODO: debug long-running Teacher (something with k?)
+all_steps_agent = []
+all_steps_inc = []
+
+student = None
+for _ in range(5):
+    curr_student = Student()
+    _, steps_agent = TeacherAgentTest(results['teacher'], 10, k=1).run(curr_student, 20, max_iters=1000, student_reward=10)
+    if len(steps_agent) > 500:
+        print('err')
+        student = curr_student
+    _, steps_inc = IncrementalTest(10, k=1).run(Student(), 20, max_iters=1000, student_reward=10)
+
+    all_steps_agent.append(steps_agent)
+    all_steps_inc.append(steps_inc)
+
+# <codecell>
+for i, steps in enumerate(all_steps_inc):
+    if i == 0:
+        plt.plot(steps, label='Incremental', alpha=0.6, color='C0')
+    else:
+        plt.plot(steps, alpha=0.6, color='C0')
+
+for i, steps in enumerate(all_steps_agent):
+    if len(steps) > 500:
+        steps = steps[:100]
+    if i == 0:
+        plt.plot(steps, label='Agent', alpha=0.6, color='C1')
+    else:
+        plt.plot(steps, alpha=0.6, color='C1')
+
+
+
+plt.title('Steps taken')
+plt.xlabel('Iteration')
+plt.ylabel('N')
+plt.legend()
+plt.savefig('fig/acl_steps_taken.png')
