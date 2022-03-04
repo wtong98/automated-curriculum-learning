@@ -8,6 +8,7 @@ author: William Tong (wtong@g.harvard.edu)
 from collections import defaultdict
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
 from scipy.stats import linregress
 from tqdm import tqdm
@@ -234,6 +235,37 @@ class Teacher(Agent):
             exp_q = np.sum(probs * qs)
 
         self.q[old_state, action] += self.lr * (reward + self.gamma * exp_q - self.q[old_state, action])
+    
+    def plot_q(self, N):
+        ns = np.arange(N) + 1
+        ls = np.arange(0, self.bins + 1)
+
+        ll, nn = np.meshgrid(ls, ns)
+        actions = []
+
+        for l, n in zip(ll.ravel(), nn.ravel()):
+            a = self.next_action((n, l), is_binned=True)
+            actions.append(a)
+
+        z = np.array(actions).reshape(ll.shape) - 1
+        # plt.contourf(ll, nn, z)
+        plt.imshow(z)
+        plt.colorbar()
+    
+    def plot_q_ent(self, N):
+        ns = np.arange(N) + 1
+        ls = np.arange(0, self.bins + 1)
+        entropy = []
+        ll, nn = np.meshgrid(ls, ns)
+
+        for l, n in zip(ll.ravel(), nn.ravel()):
+            probs = self.policy((n, l))
+            entropy.append(-np.sum(probs * np.log(probs)))
+
+        z = np.array(entropy).reshape(ll.shape)
+        # plt.contourf(ll, nn, z)
+        plt.imshow(z)
+        plt.colorbar()
 
 # <codecell>
 # student = Student()

@@ -67,14 +67,13 @@ class IncrementalTest:
                 student.learn(BinaryEnv(n, reward=student_reward), max_iters=T)
             
             curr_score = student.score(n)
-            if np.isclose(curr_score, 0, atol=1e-1):
-                n += 1
-
             all_steps.append(n)
-            final_score = student.score(self.goal_length)
-            if np.isclose(final_score, 0, atol=1e-1):
-                break
-            
+            if np.isclose(curr_score, 0, atol=1e-1):
+                if n == self.goal_length:
+                    break
+                else:
+                    n += 1
+
             self.iter += 1
 
         return self.iter, all_steps
@@ -176,11 +175,11 @@ class TeacherAgentTest:
 
 
 def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
-                  teacher_reward=10, student_reward=10,
+                  teacher_reward=10, teacher_gamma=1, student_reward=10,
                   qe_gen=None, anneal_sched=None,
                   max_iters=100000, eval_every=1000, eval_len=200):
 
-    teacher = Teacher(bins=bins, anneal_sched=anneal_sched)
+    teacher = Teacher(bins=bins, anneal_sched=anneal_sched, gamma=teacher_gamma)
 
     i = 0
     path = []
@@ -235,11 +234,11 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
         'comps': comps,
         'qs': qs
     }
-
+'''
 # <codecell>
 ### TRAIN TEACHER AGENT(S)
 max_iters = 100000
-# qe_gen = lambda: np.random.normal(loc=0, scale=1)
+# qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
 qe_gen = None
 
 N = 10
@@ -252,8 +251,8 @@ def anneal_sched(i):
     end_inv_temp = 10
     return (i / max_iters) * end_inv_temp
 
-results = train_teacher(N=N, T=T ,max_iters=max_iters, anneal_sched=anneal_sched, qe_gen=qe_gen,
-    student_reward=student_reward, teacher_reward=teacher_reward)
+results = train_teacher(N=N, T=T, teacher_gamma=1, max_iters=max_iters, anneal_sched=anneal_sched, qe_gen=qe_gen,
+    student_reward=student_reward, teacher_reward=teacher_reward, eval_len=1500, eval_every=5000)
 
 # <codecell>
 ### SANITY CHECK PLOT
@@ -275,7 +274,7 @@ heuristic_no_scale_scores = []
 agent_scores = []
 
 naive_test = NaiveTest(N, k=K)
-inc_test = IncrementalTest(N, k=K)
+inc_test = IncrementalTest(N, k=1)
 heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
@@ -411,7 +410,6 @@ plt.savefig('fig/acl_heuristic_learning_curves.png')
 
 # <codecell>
 ####### COMPARING STEPS
-# TODO: debug long-running Teacher (something with k?)
 all_steps_agent = []
 all_steps_inc = []
 
@@ -449,3 +447,6 @@ plt.xlabel('Iteration')
 plt.ylabel('N')
 plt.legend()
 plt.savefig('fig/acl_steps_taken.png')
+# %%
+
+'''
