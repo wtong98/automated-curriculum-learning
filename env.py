@@ -91,7 +91,11 @@ class CurriculumEnv(gym.Env):
         if self.student_qe_dist == None:
             self.student = Student(**self.student_args)
         else:
-            qe_val = self.student_qe_dist()
+            if type(self.student_qe_dist) == int or type(self.student_qe_dist) == float:
+                qe_val = np.random.normal(0, self.student_qe_dist)
+            else:
+                qe_val = self.student_qe_dist()
+
             q_e = defaultdict(lambda: qe_val)
             self.student = Student(q_e=q_e, **self.student_args)
 
@@ -146,7 +150,7 @@ class Agent:
 
 # TODO: include score as observed number of successes
 class Student(Agent):
-    def __init__(self, lr=0.1, gamma=1, q_e=None) -> None:
+    def __init__(self, lr=0.05, gamma=1, q_e=None) -> None:
         super().__init__()
         self.lr = lr
         self.gamma = gamma
@@ -186,7 +190,6 @@ class Teacher(Agent):
         self.lr = lr
         self.gamma = gamma
         self.q = defaultdict(int)
-        # self.q = {((n, l), a):0 for n in np.arange(1, 11) for l in np.arange(0, bins + 1) for a in [0, 1, 2]}
         self.bins = bins
         self.anneal_sched = anneal_sched
     
@@ -204,7 +207,10 @@ class Teacher(Agent):
         if self.anneal_sched == None:
             beta = 1
         else:
-            beta = self.anneal_sched(self.iter)
+            if type(self.anneal_sched) == int or type(self.anneal_sched) == float:
+                beta = self.iter * self.anneal_sched / 100000   # TODO: hardcoded max_iters
+            else:
+                beta = self.anneal_sched(self.iter)
 
         qs = np.array([self.q[(state_bin, a)] for a in [0, 1, 2]])
         probs = np.exp(beta * qs) / np.sum(np.exp(beta * qs))

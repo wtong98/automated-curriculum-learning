@@ -179,7 +179,7 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
                   qe_gen=None, anneal_sched=None,
                   max_iters=100000, eval_every=1000, eval_len=200):
 
-    teacher = Teacher(bins=bins, anneal_sched=anneal_sched, gamma=teacher_gamma)
+    teacher = Teacher(bins=bins, anneal_sched=anneal_sched, gamma=teacher_gamma, lr=0.1)
 
     i = 0
     path = []
@@ -234,6 +234,7 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
         'comps': comps,
         'qs': qs
     }
+
 '''
 # <codecell>
 ### TRAIN TEACHER AGENT(S)
@@ -433,8 +434,8 @@ for i, steps in enumerate(all_steps_inc):
         plt.plot(steps, alpha=0.6, color='C0')
 
 for i, steps in enumerate(all_steps_agent):
-    if len(steps) > 500:
-        steps = steps[:100]
+    # if len(steps) > 500:
+    #     steps = steps[:100]
     if i == 0:
         plt.plot(steps, label='Agent', alpha=0.6, color='C1')
     else:
