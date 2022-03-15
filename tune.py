@@ -97,7 +97,7 @@ with open('results.pkl', 'wb') as fp:
     pickle.dump((record, param_names), fp)
 
 # <codecell>
-with open('results.pkl', 'rb') as fp:
+with open('results_remote.pkl', 'rb') as fp:
     record, param_names = pickle.load(fp)
 
 # <codecell>

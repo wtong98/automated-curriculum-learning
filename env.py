@@ -5,12 +5,11 @@ author: William Tong (wtong@g.harvard.edu)
 """
 
 # <codecell>
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
 
-from scipy.stats import linregress
 from tqdm import tqdm
 
 def sigmoid(x):
@@ -67,7 +66,7 @@ class CurriculumEnv(gym.Env):
         self.observation_space = gym.spaces.Tuple((
             gym.spaces.Discrete(goal_length), 
             gym.spaces.Box(low=0, high=1, shape=(1,))))
-        self.N = goal_length
+        self.N = 1
 
         self.action_space = gym.spaces.Discrete(3)
         self.student_args = student_args
@@ -273,7 +272,263 @@ class Teacher(Agent):
         plt.imshow(z)
         plt.colorbar()
 
+
+class TeacherPomcpAgent(Agent):
+    def __init__(self, goal_length, T, bins=10, p_eps=0.05, student_qe=0, student_lr=0.01, student_reward=10, n_particles=500, gamma=0.9, eps=1e-2, explore_factor=1) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.T = T
+        self.bins = bins
+        self.p_eps = p_eps
+        self.student_qe = student_qe
+        self.student_lr = student_lr
+        self.student_reward = student_reward
+
+        self.n_particles = n_particles
+        self.gamma = gamma
+        self.eps = eps
+        self.explore_factor = explore_factor
+
+        self.actions = [0, 1, 2]
+        self.history = ()
+        self.tree = {}
+
+        self.qrs_means = []
+        self.qrs_stds = []
+        self.qrs_true = []
+        self.num_particles = []
+    
+
+    def next_action(self, prev_action=None, obs=None):
+        if obs != None and prev_action != None:
+            print('Observed:', obs)
+            self.history += (prev_action, obs,)
+
+            qrs = np.array([qr for _, qr in self.tree[self.history]['b']])
+            qrs_mean = np.mean(qrs, axis=0)
+            qrs_std = np.std(qrs, axis=0)
+
+            self.num_particles.append(len(qrs))
+            self.qrs_means.append(qrs_mean)
+            self.qrs_stds.append(qrs_std)
+            self.qrs_true.append([env.student.q_r[i] for i in range(2)])
+
+        return self._search()
+
+    def _sample_transition(self, state, action):
+        n, qr = state
+        new_n = np.clip(n + action - 1, 1, self.goal_length)
+
+        qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
+        log_trans_probs = [-np.log(1 + np.exp(-q)) for q in qs]
+        success_prob = np.exp(np.cumsum(log_trans_probs))
+        num_contacts = success_prob * self.T
+
+        diff_qs = np.zeros(self.goal_length)
+        upd_idx = new_n - 1
+        diff_qs[:upd_idx] = (self.student_lr * num_contacts[:-1] \
+            * (np.exp(log_trans_probs[1:]) * (qs[1:] - self.student_qe[1:]) + self.student_qe[:-1] - qs[:-1]))[:upd_idx]
+        diff_qs[upd_idx] = self.student_lr * num_contacts[upd_idx] * (self.student_reward + self.student_qe[upd_idx] - qs[upd_idx])
+        new_qr = qr + diff_qs
+        new_qs = qs + diff_qs
+
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
+        obs = self._to_bin(log_prob)
+
+        reward = 0
+        if new_n == self.goal_length and 1 - np.exp(log_prob) < self.p_eps:
+            reward = self.student_reward
+
+        return (new_n, new_qr), obs, reward
+
+    # TODO: copied from teacher
+    def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
+        logit = log_p - np.log(1 - np.exp(log_p) + eps)
+
+        norm = (logit - logit_min) / (logit_max - logit_min)
+        bin_p = np.clip(np.round(norm * self.bins), 0, self.bins)
+        
+        return bin_p
+
+    def _sample_prior(self):
+        qr = np.random.normal(size=self.goal_length)
+        return (1, qr) 
+
+    def _sample_rollout_policy(self, history):
+        return np.random.choice(self.actions)   # TODO: use something better?
+    
+    def _init_node(self):
+        return {'v': 0, 'n': 0, 'b': []}
+    
+    def _search(self):
+        for _ in range(self.n_particles):
+            if len(self.history) == 0:
+                state = self._sample_prior()
+            else:
+                if np.random.random() < 0.3:   # particle reinvigoration prob
+                    qrs = [qr for _, qr in self.tree[self.history]['b']]
+                    qrs_mean = np.mean(qrs, axis=0)
+                    new_qrs = np.random.normal(0, 0.2) + qrs_mean
+                    state = (self.tree[self.history]['b'][0][0], new_qrs)
+                    # print('Invigorated', state)
+                else:
+                    state_idx = np.random.choice(len(self.tree[self.history]['b']))
+                    state = self.tree[self.history]['b'][state_idx]
+        
+            self._simulate(state, self.history, 0)
+        
+        vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
+        return np.argmax(vals)
+    
+    def _simulate(self, state, history, depth):
+        if self.gamma ** depth < self.eps:
+            return 0
+        
+        if history not in self.tree:
+            self.tree[history] = self._init_node()
+            for a in self.actions:
+                proposal = history + (a,)
+                self.tree[proposal] = self._init_node()
+            return self._rollout(state, history, depth)
+        
+        vals = []
+        for a in self.actions:
+            curr_node = self.tree[history]
+            next_node = self.tree[history + (a,)]
+            if curr_node['n'] > 0 and next_node['n'] > 0:
+                explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
+            else:
+                explore = 999  # arbitrarily high
+
+            vals.append(next_node['v'] + explore)
+        
+        a = np.argmax(vals)
+        next_state, obs, reward = self._sample_transition(state, a)
+        total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
+
+        self.tree[history]['b'].append(state)
+        self.tree[history]['n'] += 1
+
+        next_node = self.tree[history + (a,)]
+        next_node['n'] += 1
+        next_node['v'] += (total_reward - next_node['v']) / next_node['n']
+        return total_reward
+    
+    def _rollout(self, state, history, depth):
+        if self.gamma ** depth < self.eps:
+            return 0
+        
+        a = self._sample_rollout_policy(history)
+        next_state, obs, reward = self._sample_transition(state, a)
+        return reward + self.gamma * self._rollout(next_state, history + (a, obs), depth + 1)
+
+    def learn(self, *args, **kwargs):
+        raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
+
+'''
+
 # <codecell>
-# student = Student()
-# student.learn(BinaryEnv(5), is_eval=False)
+N = 2
+T = 3
+p_eps = 0.1
+es = np.zeros(N)
+
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=5, p_eps=p_eps, student_qe=es)
+env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=0.005)
+
+prev_obs = env.reset()
+prev_a = None
+is_done = False
+
+# TODO: debug agent tree update <--- STILL HERE
+while not is_done:
+    a = agent.next_action(prev_a, prev_obs)
+    print('Took a:', a)
+
+    state, reward, is_done, _ = env.step(a)
+    obs = agent._to_bin(state[1])
+
+    prev_a = a
+    prev_obs = obs
+
+print('Great success!')
+
+# <codecell>
+### PLOT RUN DIAGNOSTICS
+fig, axs = plt.subplots(2, 1, figsize=(6, 6))
+
+steps = np.arange(len(agent.num_particles))
+
+axs[0].errorbar(steps, [q[0] for q in agent.qrs_means], yerr=[2 * s[0] for s in agent.qrs_stds], label='Pred qr[0]')
+axs[0].errorbar(steps, [q[1] for q in agent.qrs_means], yerr=[2 * s[1] for s in agent.qrs_stds], label='Pred qr[1]', color='C0')
+axs[0].plot(steps, [q[0] for q in agent.qrs_true], label='True qr[0]')
+axs[0].plot(steps, [q[1] for q in agent.qrs_true], label='True qr[1]', color='C1')
+axs[0].legend()
+axs[0].set_xlabel('Step')
+axs[0].set_ylabel('q')
+
+axs[1].bar(steps, agent.num_particles)
+axs[1].set_xlabel('Step')
+axs[1].set_ylabel('# particles')
+
+fig.suptitle('State estimates of POMCP agent')
+fig.tight_layout()
+
+plt.savefig('fig/pomcp_state_estimate.png')
+
+
 # %%
+# <codecell>
+### INVESTIGATE CLOSENESS OF MODEL TO REALITY
+N = 2
+T = 3
+p_eps = 0.1
+es = np.zeros(N)
+
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=5, p_eps=p_eps, student_qe=es)
+env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=0.005)
+
+iters = 10
+
+all_pred_qrs = []
+all_pred_obs = []
+all_qrs = []
+all_obs = []
+
+env.reset()
+
+for _ in range(iters):
+    action = np.random.choice(3)
+
+    q_r = env.student.q_r
+    n = env.N
+
+    q_r = [q_r[i] for i in range(N)]
+    (new_n, new_qr), pred_obs, pred_reward = agent._sample_transition((n, q_r), action)
+
+    state, reward, _, _ = env.step(action)
+
+    assert state[0] == new_n
+    assert reward == pred_reward
+
+    all_pred_qrs.append(new_qr)
+    all_pred_obs.append(pred_obs)
+    all_qrs.append(env.student.q_r.copy())
+    all_obs.append(agent._to_bin(state[1]))
+
+
+# %%
+plt.plot(all_pred_obs, '--o', label='Pred obs')
+plt.plot(all_obs, '--o', label='True obs')
+plt.legend()
+
+# %%
+plt.plot([q[0] for q in all_pred_qrs], '--o', label='Pred qr[0]')
+plt.plot([q[0] for q in all_qrs], '--o', label='Obs qr[0]')
+plt.plot([q[1] for q in all_pred_qrs], '--o', label='Pred qr[1]', color='C0')
+plt.plot([q[1] for q in all_qrs], '--o', label='Obs qr[1]', color='C1')
+plt.legend()
+
+# %%
+
+'''

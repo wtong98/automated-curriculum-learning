@@ -235,7 +235,6 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
         'qs': qs
     }
 
-'''
 # <codecell>
 ### TRAIN TEACHER AGENT(S)
 max_iters = 100000
@@ -252,7 +251,7 @@ def anneal_sched(i):
     end_inv_temp = 10
     return (i / max_iters) * end_inv_temp
 
-results = train_teacher(N=N, T=T, teacher_gamma=1, max_iters=max_iters, anneal_sched=anneal_sched, qe_gen=qe_gen,
+results = train_teacher(N=N, T=T, bins=30, p_eps=0.05, teacher_gamma=1, max_iters=max_iters, anneal_sched=anneal_sched, qe_gen=qe_gen,
     student_reward=student_reward, teacher_reward=teacher_reward, eval_len=1500, eval_every=5000)
 
 # <codecell>
@@ -274,7 +273,7 @@ heuristic_scale_100_scores = []
 heuristic_no_scale_scores = []
 agent_scores = []
 
-naive_test = NaiveTest(N, k=K)
+naive_test = NaiveTest(N, k=1)
 inc_test = IncrementalTest(N, k=1)
 heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
@@ -301,19 +300,19 @@ for _ in tqdm(range(iters)):
 all_scores = [
     naive_scores, 
     inc_scores,
-    heuristic_no_scale_scores, 
-    heuristic_scale_100_scores, 
+    # heuristic_no_scale_scores, 
+    # heuristic_scale_100_scores, 
     agent_scores]
 
 labels = [
     'Random teacher',
     'Incremental',
-    'Heuristic, scale=1',
-    'Heuristic, scale=100',
+    # 'Heuristic, scale=1',
+    # 'Heuristic, scale=100',
     'Teacher agent'
 ]
 
-plt.gcf().set_size_inches(10, 4)
+plt.gcf().set_size_inches(6, 4)
 plt.title('Average number of iterations to train a student (k = 5)')
 plt.ylabel('Iterations')
 
@@ -321,7 +320,7 @@ all_means = [np.mean(score) for score in all_scores]
 all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
-plt.savefig('fig/acl_method_comparison_only_teachers.png')
+plt.savefig('fig/acl_method_comparison_only_teachers_trimmed.png')
 
 
 # <codecell>
