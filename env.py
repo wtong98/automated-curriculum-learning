@@ -83,7 +83,8 @@ class CurriculumEnv(gym.Env):
             reward = self.teacher_reward
             is_done = True
         
-        log_prob = self._get_score(self.N)
+        # log_prob = self._get_score(self.N)
+        log_prob = np.log(prob)
         return (self.N, log_prob), reward, is_done, {}
     
     def reset(self):
@@ -155,7 +156,7 @@ class Student(Agent):
         self.gamma = gamma
 
         # only track Q-values for action = 1, maps state --> value
-        self.q_e = defaultdict(int) if q_e == None else q_e
+        self.q_e = defaultdict(int) if type(q_e) == type(None) else q_e
         self.q_r = defaultdict(int)
     
     # softmax policy
@@ -298,6 +299,16 @@ class TeacherPomcpAgent(Agent):
         self.qrs_true = []
         self.num_particles = []
     
+    
+    def reset(self):
+        self.history = ()
+        self.tree = {}
+
+        self.qrs_means = []
+        self.qrs_stds = []
+        self.qrs_true = []
+        self.num_particles = []
+    
 
     def next_action(self, prev_action=None, obs=None):
         if obs != None and prev_action != None:
@@ -311,7 +322,7 @@ class TeacherPomcpAgent(Agent):
             self.num_particles.append(len(qrs))
             self.qrs_means.append(qrs_mean)
             self.qrs_stds.append(qrs_std)
-            self.qrs_true.append([env.student.q_r[i] for i in range(2)])
+            # self.qrs_true.append([env.student.q_r[i] for i in range(2)])
 
         return self._search()
 
@@ -332,6 +343,14 @@ class TeacherPomcpAgent(Agent):
         new_qr = qr + diff_qs
         new_qs = qs + diff_qs
 
+        # print('---')
+        # print('ACTION', action)
+        # print('ORIG_QR', qr)
+        # print('N_CONTA', num_contacts)
+        # print('DIFF_QS', diff_qs)
+        # print('NEW_QR', new_qr)
+        # print('LR:', self.student_lr)
+
         log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
         obs = self._to_bin(log_prob)
 
@@ -351,7 +370,7 @@ class TeacherPomcpAgent(Agent):
         return bin_p
 
     def _sample_prior(self):
-        qr = np.random.normal(size=self.goal_length)
+        qr = np.random.normal(scale=0.5, size=self.goal_length)
         return (1, qr) 
 
     def _sample_rollout_policy(self, history):
@@ -368,7 +387,13 @@ class TeacherPomcpAgent(Agent):
                 if np.random.random() < 0.3:   # particle reinvigoration prob
                     qrs = [qr for _, qr in self.tree[self.history]['b']]
                     qrs_mean = np.mean(qrs, axis=0)
-                    new_qrs = np.random.normal(0, 0.2) + qrs_mean
+                    qrs_cov = np.cov(qrs, rowvar=False)
+                    np.fill_diagonal(qrs_cov, np.clip(np.diag(qrs_cov), 0.2, np.inf))  # boost variance
+
+                    # print('HIST LEN', len(self.tree[self.history]['b']))
+                    # print('QRS_COV', qrs_cov)
+                    # print('QRS_CORR', np.corrcoef(qrs, rowvar=False))
+                    new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
                     state = (self.tree[self.history]['b'][0][0], new_qrs)
                     # print('Invigorated', state)
                 else:
@@ -378,6 +403,7 @@ class TeacherPomcpAgent(Agent):
             self._simulate(state, self.history, 0)
         
         vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
+        print('VALS', vals)
         return np.argmax(vals)
     
     def _simulate(self, state, history, depth):
@@ -406,8 +432,9 @@ class TeacherPomcpAgent(Agent):
         next_state, obs, reward = self._sample_transition(state, a)
         total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
 
-        self.tree[history]['b'].append(state)
-        self.tree[history]['n'] += 1
+        if depth > 0:   # NOTE: avoid re-adding encountered state?
+            self.tree[history]['b'].append(state)
+            self.tree[history]['n'] += 1
 
         next_node = self.tree[history + (a,)]
         next_node['n'] += 1
@@ -425,32 +452,40 @@ class TeacherPomcpAgent(Agent):
     def learn(self, *args, **kwargs):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
 
-'''
 
+# '''
 # <codecell>
-N = 2
-T = 3
+N = 3
+T = 10
+student_lr = 0.005
 p_eps = 0.1
-es = np.zeros(N)
+L = 20
+gamma = 0.9
+es = np.zeros(N+1) - 1
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=5, p_eps=p_eps, student_qe=es)
-env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=0.005)
+qrs_true = []
+
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma)
+env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
 prev_obs = env.reset()
 prev_a = None
 is_done = False
 
-# TODO: debug agent tree update <--- STILL HERE
+
 while not is_done:
     a = agent.next_action(prev_a, prev_obs)
     print('Took a:', a)
 
     state, reward, is_done, _ = env.step(a)
     obs = agent._to_bin(state[1])
+    print('At n:', env.N)
 
+    qrs_true.append((env.student.q_r[0], env.student.q_r[1]))
     prev_a = a
     prev_obs = obs
 
+qrs_true = qrs_true[1:]
 print('Great success!')
 
 # <codecell>
@@ -461,8 +496,8 @@ steps = np.arange(len(agent.num_particles))
 
 axs[0].errorbar(steps, [q[0] for q in agent.qrs_means], yerr=[2 * s[0] for s in agent.qrs_stds], label='Pred qr[0]')
 axs[0].errorbar(steps, [q[1] for q in agent.qrs_means], yerr=[2 * s[1] for s in agent.qrs_stds], label='Pred qr[1]', color='C0')
-axs[0].plot(steps, [q[0] for q in agent.qrs_true], label='True qr[0]')
-axs[0].plot(steps, [q[1] for q in agent.qrs_true], label='True qr[1]', color='C1')
+axs[0].plot(steps, [q[0] for q in qrs_true], label='True qr[0]')
+axs[0].plot(steps, [q[1] for q in qrs_true], label='True qr[1]', color='C1')
 axs[0].legend()
 axs[0].set_xlabel('Step')
 axs[0].set_ylabel('q')
@@ -480,15 +515,17 @@ plt.savefig('fig/pomcp_state_estimate.png')
 # %%
 # <codecell>
 ### INVESTIGATE CLOSENESS OF MODEL TO REALITY
-N = 2
-T = 3
+N = 5
+T = 10
+student_lr = 0.005 
 p_eps = 0.1
-es = np.zeros(N)
+L = 20
+es = np.zeros(N+1) - 1   # TODO: raw conversion seems to cause problems here
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=5, p_eps=p_eps, student_qe=es)
-env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=0.005)
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
+env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
-iters = 10
+iters = 20
 
 all_pred_qrs = []
 all_pred_obs = []
@@ -508,6 +545,9 @@ for _ in range(iters):
 
     state, reward, _, _ = env.step(action)
 
+    # print('-T-R-U-E-')
+    # print('QR', env.student.q_r)
+
     assert state[0] == new_n
     assert reward == pred_reward
 
@@ -520,7 +560,13 @@ for _ in range(iters):
 # %%
 plt.plot(all_pred_obs, '--o', label='Pred obs')
 plt.plot(all_obs, '--o', label='True obs')
+plt.yticks(np.arange(L+1))
 plt.legend()
+
+plt.title('Predicted vs. true observations')
+plt.xlabel('Iteration')
+plt.ylabel('Observation')
+plt.savefig('fig/pomcp_debug_obs.png')
 
 # %%
 plt.plot([q[0] for q in all_pred_qrs], '--o', label='Pred qr[0]')
@@ -529,6 +575,10 @@ plt.plot([q[1] for q in all_pred_qrs], '--o', label='Pred qr[1]', color='C0')
 plt.plot([q[1] for q in all_qrs], '--o', label='Obs qr[1]', color='C1')
 plt.legend()
 
-# %%
+plt.title('Predicted vs true states')
+plt.xlabel('Iteration')
+plt.ylabel('Q')
+plt.savefig('fig/pomcp_debug_state.png')
 
+# %%
 '''

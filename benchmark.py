@@ -9,7 +9,7 @@ import numpy as np
 from scipy.stats import linregress
 from tqdm import tqdm
 
-from env import BinaryEnv, Student, Teacher, CurriculumEnv
+from env import *
 
 class NoTeacherTest:
     def __init__(self, goal_length, k=1):
@@ -78,7 +78,7 @@ class IncrementalTest:
 
         return self.iter, all_steps
 
-
+# TODO: ensure heuristic test is repeatable
 class TeacherHeuristicTest:
     def __init__(self, goal_length, lr=0.1, k=5) -> None:
         self.goal_length = goal_length
@@ -174,8 +174,65 @@ class TeacherAgentTest:
         return self.iter, all_steps
 
 
+class PomcpTest:
+    def __init__(self, teacher_agent, goal_length, k=1):
+        self.teacher = teacher_agent
+        self.goal_length = goal_length
+        self.k = k
+    
+    def run(self, student, T, max_iters=1000, student_reward=1):
+        self.teacher.reset()
+        self.iter = 0
+        N = 1
+        
+        prev_obs = None
+        prev_a = None
+
+        all_steps = []
+        for _ in range(max_iters):
+            a = self.teacher.next_action(prev_a, prev_obs)
+            N = np.clip(N + a - 1, 1, self.goal_length)
+            all_steps.append(N)
+
+            for _ in range(self.k):
+                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
+
+            log_p = student.score(N)
+            obs = self.teacher._to_bin(log_p)
+
+            self.iter += 1
+
+            final_score = student.score(self.goal_length)
+            if np.isclose(final_score, 0, atol=1e-1):
+            # if 1 - np.exp(log_p) < 0.1:
+                break
+
+            prev_a = a
+            prev_obs = obs
+        
+        return self.iter, all_steps
+
+# # <codecell>
+# # TODO: something wrong with test vs. env runs
+# N = 2
+# T = 10
+# student_lr = 0.005
+# p_eps = 0.1
+# L = 10
+# gamma = 0.9
+# es = np.zeros(N+1)
+
+# teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma)
+# # env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr)
+# student = Student(lr=student_lr, q_e=es)
+
+# test = PomcpTest(teacher, goal_length=2)
+# test.run(student, T, student_reward=10)
+        
+
+
 def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
-                  teacher_reward=10, teacher_gamma=1, student_reward=10,
+                  teacher_reward=10, teacher_gamma=1, student_reward=10, student_lr=0.1,
                   qe_gen=None, anneal_sched=None,
                   max_iters=100000, eval_every=1000, eval_len=200):
 
@@ -197,7 +254,7 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
             eval_env = CurriculumEnv(N, T, 
                 p_eps=p_eps, 
                 student_reward=student_reward, teacher_reward=teacher_reward, 
-                student_qe_dist=qe_gen)
+                student_qe_dist=qe_gen, lr=student_lr)
 
             state = eval_env.reset()
 
@@ -222,7 +279,7 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
             
     env = CurriculumEnv(N, T, 
         p_eps=p_eps, teacher_reward=teacher_reward, student_reward=student_reward, 
-        student_qe_dist=qe_gen)
+        student_qe_dist=qe_gen, lr=student_lr)
     teacher.learn(env, max_iters=max_iters, use_tqdm=True, post_hook=log)
 
     path = np.array(path)
@@ -239,10 +296,15 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
 ### TRAIN TEACHER AGENT(S)
 max_iters = 100000
 # qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
-qe_gen = None
+# qe_gen = None
 
-N = 10
-T = 20
+N = 2
+T = 10
+student_lr = 0.005
+p_eps = 0.1
+L = 20
+pomcp_gamma = 0.9
+es = np.zeros(N+1) - 1
 
 teacher_reward = 10
 student_reward = 10
@@ -251,8 +313,8 @@ def anneal_sched(i):
     end_inv_temp = 10
     return (i / max_iters) * end_inv_temp
 
-results = train_teacher(N=N, T=T, bins=30, p_eps=0.05, teacher_gamma=1, max_iters=max_iters, anneal_sched=anneal_sched, qe_gen=qe_gen,
-    student_reward=student_reward, teacher_reward=teacher_reward, eval_len=1500, eval_every=5000)
+results = train_teacher(N=N, T=T, bins=L, p_eps=p_eps, teacher_gamma=1, max_iters=max_iters, anneal_sched=anneal_sched,
+    student_reward=student_reward, student_lr=student_lr, teacher_reward=teacher_reward, eval_len=1500, eval_every=5000)
 
 # <codecell>
 ### SANITY CHECK PLOT
@@ -264,63 +326,72 @@ plt.savefig('fig/teacher_average_ttc.png')
 
 # <codecell>
 ### GATHER PERFORMANCE METRICS
-iters = 50
-K = 5
+iters = 5
+# K = 5
 
 naive_scores = []
 inc_scores = []
-heuristic_scale_100_scores = []
-heuristic_no_scale_scores = []
+# heuristic_scale_100_scores = []
+# heuristic_no_scale_scores = []
 agent_scores = []
+pomcp_scores = []
 
 naive_test = NaiveTest(N, k=1)
 inc_test = IncrementalTest(N, k=1)
 heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
+pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma)
+pomcp_test = PomcpTest(pom_teacher, goal_length=N)
+
 for _ in tqdm(range(iters)):
     naive_scores.append(
-        naive_test.run(Student(), T, max_iters=10000, student_reward=student_reward))
+        naive_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward))
 
     inc_scores.append(
-        inc_test.run(Student(), T, max_iters=10000, student_reward=student_reward)[0])
+        inc_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
 
-    heuristic_no_scale_scores.append(heuristic_test.run(
-        Student(), T, max_iters=10000, student_reward=student_reward, scale=1)[0])
+    # heuristic_no_scale_scores.append(heuristic_test.run(
+    #     Student(), T, max_iters=10000, student_reward=student_reward, scale=1)[0])
     
-    heuristic_test.reset()
+    # heuristic_test.reset()
 
-    heuristic_scale_100_scores.append(
-        heuristic_test.run(Student(), T, max_iters=10000, student_reward=student_reward, scale=100)[0])
+    # heuristic_scale_100_scores.append(
+    #     heuristic_test.run(Student(), T, max_iters=10000, student_reward=student_reward, scale=100)[0])
 
     agent_scores.append(agent_test.run(
-        Student(), T, max_iters=10000, student_reward=student_reward)[0])
+        Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
 
+    pomcp_scores.append(pomcp_test.run(
+        Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
+        
 # %%
 all_scores = [
     naive_scores, 
     inc_scores,
     # heuristic_no_scale_scores, 
     # heuristic_scale_100_scores, 
-    agent_scores]
+    agent_scores,
+    pomcp_scores]
 
 labels = [
     'Random teacher',
     'Incremental',
     # 'Heuristic, scale=1',
     # 'Heuristic, scale=100',
-    'Teacher agent'
+    'Teacher agent',
+    'Pomcp agent'
 ]
 
-plt.gcf().set_size_inches(6, 4)
-plt.title('Average number of iterations to train a student (k = 5)')
+plt.gcf().set_size_inches(8, 4)
+plt.title('Average number of iterations to train a student')
 plt.ylabel('Iterations')
 
 all_means = [np.mean(score) for score in all_scores]
 all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
-plt.savefig('fig/acl_method_comparison_only_teachers_trimmed.png')
+plt.savefig('fig/acl_method_comparison_n_2_eps_neg_1.png')
 
 
 # <codecell>
