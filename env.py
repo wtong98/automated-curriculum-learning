@@ -99,12 +99,13 @@ class CurriculumEnv(gym.Env):
             q_e = defaultdict(lambda: qe_val)
             self.student = Student(q_e=q_e, **self.student_args)
 
-        student_score = self._get_score(self.goal_length)
+        student_score = self._get_score(self.goal_length, train=False)
         self.N  = 1
         return (self.goal_length, student_score)
 
-    def _get_score(self, length):
-        self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
+    def _get_score(self, length, train=True):
+        if train:
+            self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
         return self.student.score(length)
 
 
@@ -170,11 +171,11 @@ class Student(Agent):
         return np.random.binomial(n=1, p=prob)
     
     def update(self, old_state, _, reward, next_state, is_done):
-        _, prob = self.policy(next_state)
         if is_done:
             exp_q = 0
         else:
-            exp_q = prob * self.q_r[next_state]
+            _, prob = self.policy(next_state)
+            exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])  # TODO: double-check
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
 
     def score(self, goal_state) -> float:
@@ -460,8 +461,8 @@ T = 10
 student_lr = 0.005
 p_eps = 0.1
 L = 20
-gamma = 0.9
-es = np.zeros(N+1) - 1
+gamma = 0.9   #TODO: bump up gamma, try with N = 3 <-- STOPPED HERE
+es = np.zeros(N) - 1
 
 qrs_true = []
 
@@ -515,12 +516,12 @@ plt.savefig('fig/pomcp_state_estimate.png')
 # %%
 # <codecell>
 ### INVESTIGATE CLOSENESS OF MODEL TO REALITY
-N = 5
+N = 3
 T = 10
 student_lr = 0.005 
 p_eps = 0.1
 L = 20
-es = np.zeros(N+1) - 1   # TODO: raw conversion seems to cause problems here
+es = np.zeros(N) - 2   # TODO: raw conversion seems to cause problems here
 
 agent = TeacherPomcpAgent(goal_length=N, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
