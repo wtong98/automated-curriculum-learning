@@ -298,13 +298,14 @@ max_iters = 100000
 # qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
 # qe_gen = None
 
-N = 2
+N = 3
 T = 10
 student_lr = 0.005
 p_eps = 0.1
-L = 20
-pomcp_gamma = 0.9
-es = np.zeros(N+1) - 1
+L = 10
+pomcp_gamma = 0.95
+es = np.zeros(N) - 0.5
+n_particles = 750
 
 teacher_reward = 10
 student_reward = 10
@@ -336,20 +337,25 @@ inc_scores = []
 agent_scores = []
 pomcp_scores = []
 
+inc_steps = []
+agent_steps = []
+pomcp_steps = []
+
 naive_test = NaiveTest(N, k=1)
 inc_test = IncrementalTest(N, k=1)
-heuristic_test = TeacherHeuristicTest(N, k=5)
+# heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
-pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma)
+pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma, n_particles=n_particles)
 pomcp_test = PomcpTest(pom_teacher, goal_length=N)
 
 for _ in tqdm(range(iters)):
     naive_scores.append(
         naive_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward))
 
-    inc_scores.append(
-        inc_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
+    inc_sc, inc_stp = inc_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
+    inc_scores.append(inc_sc)
+    inc_steps.append(inc_stp)
 
     # heuristic_no_scale_scores.append(heuristic_test.run(
     #     Student(), T, max_iters=10000, student_reward=student_reward, scale=1)[0])
@@ -359,11 +365,13 @@ for _ in tqdm(range(iters)):
     # heuristic_scale_100_scores.append(
     #     heuristic_test.run(Student(), T, max_iters=10000, student_reward=student_reward, scale=100)[0])
 
-    agent_scores.append(agent_test.run(
-        Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
+    agent_sc, agent_stp = agent_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
+    agent_scores.append(agent_sc)
+    agent_steps.append(agent_stp)
 
-    pomcp_scores.append(pomcp_test.run(
-        Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)[0])
+    pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
+    pomcp_scores.append(pomcp_sc)
+    pomcp_steps.append(pomcp_stp)
         
 # %%
 all_scores = [
@@ -391,8 +399,7 @@ all_means = [np.mean(score) for score in all_scores]
 all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
-plt.savefig('fig/acl_method_comparison_n_2_eps_neg_1.png')
-
+plt.savefig('fig/acl_method_comparison_n_3_eps_neg_0p5.png')
 
 # <codecell>
 ### COMPARE PERFORMANCE FOR PARAMS OF TEACHER AGENT
@@ -497,26 +504,36 @@ for _ in range(5):
     all_steps_inc.append(steps_inc)
 
 # <codecell>
-for i, steps in enumerate(all_steps_inc):
-    if i == 0:
-        plt.plot(steps, label='Incremental', alpha=0.6, color='C0')
-    else:
-        plt.plot(steps, alpha=0.6, color='C0')
+fig, axs = plt.subplots(3, 1, figsize=(6, 5))
 
-for i, steps in enumerate(all_steps_agent):
+for i, steps in enumerate(inc_steps):
+    axs[0].set_title('Incremental')
+    axs[0].set_xlim(0, 250)
+    if i == 0:
+        axs[0].plot(steps, label='Incremental', alpha=0.6, color='C0')
+    else:
+        axs[0].plot(steps, alpha=0.6, color='C0')
+
+for i, steps in enumerate(agent_steps):
     # if len(steps) > 500:
     #     steps = steps[:100]
+    axs[1].set_title('SARSA Agent')
+    axs[1].set_xlim(0, 250)
     if i == 0:
-        plt.plot(steps, label='Agent', alpha=0.6, color='C1')
+        axs[1].plot(steps, label='Agent', alpha=0.6, color='C1')
     else:
-        plt.plot(steps, alpha=0.6, color='C1')
+        axs[1].plot(steps, alpha=0.6, color='C1')
 
+for i, steps in enumerate(pomcp_steps):
+    axs[2].set_title('POMCP')
+    axs[2].set_xlim(0, 250)
+    if i == 0:
+        axs[2].plot(steps, label='Agent', alpha=0.6, color='C2')
+    else:
+        axs[2].plot(steps, alpha=0.6, color='C2')
 
+fig.tight_layout()
 
-plt.title('Steps taken')
-plt.xlabel('Iteration')
-plt.ylabel('N')
-plt.legend()
 plt.savefig('fig/acl_steps_taken.png')
 # %%
 

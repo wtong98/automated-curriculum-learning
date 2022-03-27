@@ -356,10 +356,12 @@ class TeacherPomcpAgent(Agent):
         obs = self._to_bin(log_prob)
 
         reward = 0
+        is_done = False
         if new_n == self.goal_length and 1 - np.exp(log_prob) < self.p_eps:
             reward = self.student_reward
+            is_done = True
 
-        return (new_n, new_qr), obs, reward
+        return (new_n, new_qr), obs, reward, is_done
 
     # TODO: copied from teacher
     def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
@@ -408,61 +410,130 @@ class TeacherPomcpAgent(Agent):
         return np.argmax(vals)
     
     def _simulate(self, state, history, depth):
-        if self.gamma ** depth < self.eps:
-            return 0
-        
-        if history not in self.tree:
-            self.tree[history] = self._init_node()
+        reward_stack = []
+        node_stack = []
+        n_visited_stack = []
+
+        while self.gamma ** depth > self.eps:
+            if history not in self.tree:
+                self.tree[history] = self._init_node()
+                for a in self.actions:
+                    proposal = history + (a,)
+                    self.tree[proposal] = self._init_node()
+                pred_reward = self._rollout(state, history, depth)
+                reward_stack.append(pred_reward)
+                break
+
+            vals = []
             for a in self.actions:
-                proposal = history + (a,)
-                self.tree[proposal] = self._init_node()
-            return self._rollout(state, history, depth)
-        
-        vals = []
-        for a in self.actions:
-            curr_node = self.tree[history]
+                curr_node = self.tree[history]
+                next_node = self.tree[history + (a,)]
+                if curr_node['n'] > 0 and next_node['n'] > 0:
+                    explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
+                else:
+                    explore = 999  # arbitrarily high
+
+                vals.append(next_node['v'] + explore)
+
+            a = np.argmax(vals)
+            next_state, obs, reward, is_done = self._sample_transition(state, a)
+            reward_stack.append(reward)
+            if is_done:
+                break
+
+            if depth > 0:   # NOTE: avoid re-adding encountered state
+                self.tree[history]['b'].append(state)
+                self.tree[history]['n'] += 1
+
             next_node = self.tree[history + (a,)]
-            if curr_node['n'] > 0 and next_node['n'] > 0:
-                explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
-            else:
-                explore = 999  # arbitrarily high
+            next_node['n'] += 1
+            node_stack.append(next_node)
+            n_visited_stack.append(next_node['n'])
+            # next_node['v'] += (total_reward - next_node['v']) / next_node['n']
 
-            vals.append(next_node['v'] + explore)
+            history += (a, obs)
+            state = next_state
+            depth += 1
+            # total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
         
-        a = np.argmax(vals)
-        next_state, obs, reward = self._sample_transition(state, a)
-        total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
+        for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
+            total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
+            node['v'] += (total_reward - node['v']) / n_visited
 
-        if depth > 0:   # NOTE: avoid re-adding encountered state?
-            self.tree[history]['b'].append(state)
-            self.tree[history]['n'] += 1
 
-        next_node = self.tree[history + (a,)]
-        next_node['n'] += 1
-        next_node['v'] += (total_reward - next_node['v']) / next_node['n']
-        return total_reward
+        # if self.gamma ** depth < self.eps:
+        #     return 0
+        
+        # if history not in self.tree:
+        #     self.tree[history] = self._init_node()
+        #     for a in self.actions:
+        #         proposal = history + (a,)
+        #         self.tree[proposal] = self._init_node()
+        #     return self._rollout(state, history, depth)
+        
+        # vals = []
+        # for a in self.actions:
+        #     curr_node = self.tree[history]
+        #     next_node = self.tree[history + (a,)]
+        #     if curr_node['n'] > 0 and next_node['n'] > 0:
+        #         explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
+        #     else:
+        #         explore = 999  # arbitrarily high
+
+        #     vals.append(next_node['v'] + explore)
+        
+        # a = np.argmax(vals)
+        # next_state, obs, reward = self._sample_transition(state, a)
+        # total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
+
+        # if depth > 0:   # NOTE: avoid re-adding encountered state?
+        #     self.tree[history]['b'].append(state)
+        #     self.tree[history]['n'] += 1
+
+        # next_node = self.tree[history + (a,)]
+        # next_node['n'] += 1
+        # next_node['v'] += (total_reward - next_node['v']) / next_node['n']
+        # return total_reward
     
     def _rollout(self, state, history, depth):
-        if self.gamma ** depth < self.eps:
-            return 0
+        g = 1
+        total_reward = 0
+
+        while self.gamma ** depth > self.eps:
+            a = self._sample_rollout_policy(history)
+            state, obs, reward, is_done = self._sample_transition(state, a)
+
+            history += (a, obs)
+            total_reward += g * reward
+            g *= self.gamma
+            depth += 1
+
+            if is_done:
+                break
         
-        a = self._sample_rollout_policy(history)
-        next_state, obs, reward = self._sample_transition(state, a)
-        return reward + self.gamma * self._rollout(next_state, history + (a, obs), depth + 1)
+        return total_reward
+
+        # depth = init_depth
+        # if self.gamma ** depth < self.eps:
+        #     return 0
+        
+        # a = self._sample_rollout_policy(history)
+        # next_state, obs, reward = self._sample_transition(state, a)
+        # return reward + self.gamma * self._rollout(next_state, history + (a, obs), depth + 1)
 
     def learn(self, *args, **kwargs):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
 
 
-# '''
+'''
 # <codecell>
 N = 3
 T = 10
 student_lr = 0.005
 p_eps = 0.1
 L = 20
-gamma = 0.9   #TODO: bump up gamma, try with N = 3 <-- STOPPED HERE
-es = np.zeros(N) - 1
+gamma = 0.95
+es = np.zeros(N) - 0.5
 
 qrs_true = []
 
@@ -482,7 +553,7 @@ while not is_done:
     obs = agent._to_bin(state[1])
     print('At n:', env.N)
 
-    qrs_true.append((env.student.q_r[0], env.student.q_r[1]))
+    qrs_true.append([env.student.q_r[i] for i in range(N)])
     prev_a = a
     prev_obs = obs
 
@@ -495,10 +566,14 @@ fig, axs = plt.subplots(2, 1, figsize=(6, 6))
 
 steps = np.arange(len(agent.num_particles))
 
-axs[0].errorbar(steps, [q[0] for q in agent.qrs_means], yerr=[2 * s[0] for s in agent.qrs_stds], label='Pred qr[0]')
-axs[0].errorbar(steps, [q[1] for q in agent.qrs_means], yerr=[2 * s[1] for s in agent.qrs_stds], label='Pred qr[1]', color='C0')
-axs[0].plot(steps, [q[0] for q in qrs_true], label='True qr[0]')
-axs[0].plot(steps, [q[1] for q in qrs_true], label='True qr[1]', color='C1')
+for i in range(N):
+    axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
+    axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}')
+
+# axs[0].errorbar(steps, [q[0] for q in agent.qrs_means], yerr=[2 * s[0] for s in agent.qrs_stds], label='Pred qr[0]')
+# axs[0].errorbar(steps, [q[1] for q in agent.qrs_means], yerr=[2 * s[1] for s in agent.qrs_stds], label='Pred qr[1]', color='C0')
+# axs[0].plot(steps, [q[0] for q in qrs_true], label='True qr[0]')
+# axs[0].plot(steps, [q[1] for q in qrs_true], label='True qr[1]', color='C1')
 axs[0].legend()
 axs[0].set_xlabel('Step')
 axs[0].set_ylabel('q')
