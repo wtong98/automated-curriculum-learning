@@ -298,14 +298,14 @@ max_iters = 100000
 # qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
 # qe_gen = None
 
-N = 3
-T = 10
+N = 10
+T = 20
 student_lr = 0.005
 p_eps = 0.1
-L = 10
+L = 5
 pomcp_gamma = 0.95
-es = np.zeros(N) - 0.5
-n_particles = 750
+es = np.zeros(N)
+n_particles = 1000
 
 teacher_reward = 10
 student_reward = 10
@@ -399,8 +399,10 @@ all_means = [np.mean(score) for score in all_scores]
 all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
-plt.savefig('fig/acl_method_comparison_n_3_eps_neg_0p5.png')
+plt.savefig('fig/acl_method_comparison_n_10_eps_0.png')
 
+
+'''
 # <codecell>
 ### COMPARE PERFORMANCE FOR PARAMS OF TEACHER AGENT
 bins = [3, 5, 7, 10, 15, 20, 30]
@@ -484,26 +486,10 @@ fig.suptitle('Learning curves for each task (scale=1)')
 fig.tight_layout()
 
 plt.savefig('fig/acl_heuristic_learning_curves.png')
-
-
-# <codecell>
-####### COMPARING STEPS
-all_steps_agent = []
-all_steps_inc = []
-
-student = None
-for _ in range(5):
-    curr_student = Student()
-    _, steps_agent = TeacherAgentTest(results['teacher'], 10, k=1).run(curr_student, 20, max_iters=1000, student_reward=10)
-    if len(steps_agent) > 500:
-        print('err')
-        student = curr_student
-    _, steps_inc = IncrementalTest(10, k=1).run(Student(), 20, max_iters=1000, student_reward=10)
-
-    all_steps_agent.append(steps_agent)
-    all_steps_inc.append(steps_inc)
+'''
 
 # <codecell>
+### PLOTTING STEPS
 fig, axs = plt.subplots(3, 1, figsize=(6, 5))
 
 for i, steps in enumerate(inc_steps):
@@ -536,5 +522,3 @@ fig.tight_layout()
 
 plt.savefig('fig/acl_steps_taken.png')
 # %%
-
-'''
