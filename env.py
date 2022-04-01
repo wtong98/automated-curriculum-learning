@@ -5,6 +5,8 @@ author: William Tong (wtong@g.harvard.edu)
 """
 
 # <codecell>
+import copy
+
 from collections import defaultdict, namedtuple
 import gym
 import numpy as np
@@ -276,7 +278,7 @@ class Teacher(Agent):
 
 
 class TeacherPomcpAgent(Agent):
-    def __init__(self, goal_length, T, bins=10, p_eps=0.05, student_qe=0, student_lr=0.01, student_reward=10, n_particles=500, gamma=0.9, eps=1e-2, explore_factor=1) -> None:
+    def __init__(self, goal_length, T, bins=10, p_eps=0.05, student_qe=0, student_lr=0.01, student_reward=10, n_particles=500, gamma=0.9, eps=1e-2, explore_factor=1, q_reinv_var=0.3) -> None:
         super().__init__()
         self.goal_length = goal_length
         self.T = T
@@ -285,6 +287,7 @@ class TeacherPomcpAgent(Agent):
         self.student_qe = student_qe
         self.student_lr = student_lr
         self.student_reward = student_reward
+        self.q_reinv_var = q_reinv_var
 
         self.n_particles = n_particles
         self.gamma = gamma
@@ -299,6 +302,7 @@ class TeacherPomcpAgent(Agent):
         self.qrs_stds = []
         self.qrs_true = []
         self.num_particles = []
+        self.replicas = []
     
     
     def reset(self):
@@ -311,12 +315,12 @@ class TeacherPomcpAgent(Agent):
         self.num_particles = []
     
 
-    def next_action(self, prev_action=None, obs=None):
+    def next_action(self, prev_action=None, obs=None, with_replicas=0):
         if obs != None and prev_action != None:
-            print('Observed:', obs)
+            print(f'Observed: {obs}')
             self.history += (prev_action, obs,)
 
-            qrs = np.array([qr for _, qr in self.tree[self.history]['b']])
+            qrs = np.array([qr for _, qr, _ in self.tree[self.history]['b']])
             qrs_mean = np.mean(qrs, axis=0)
             qrs_std = np.std(qrs, axis=0)
 
@@ -324,11 +328,22 @@ class TeacherPomcpAgent(Agent):
             self.qrs_means.append(qrs_mean)
             self.qrs_stds.append(qrs_std)
             # self.qrs_true.append([env.student.q_r[i] for i in range(2)])
+            print('N_particles:', len(qrs))
 
-        return self._search()
+        all_a = []
+        for _ in range(with_replicas):
+            tmp_tree = copy.deepcopy(self.tree)
+            a = self._search()
+            all_a.append(a)
+            self.tree = tmp_tree
+        
+        a = self._search()
+        all_a.append(a)
+        self.replicas.append(all_a)
+        return a
 
     def _sample_transition(self, state, action):
-        n, qr = state
+        n, qr, success_states = state
         new_n = np.clip(n + action - 1, 1, self.goal_length)
 
         qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
@@ -357,11 +372,20 @@ class TeacherPomcpAgent(Agent):
 
         reward = 0
         is_done = False
-        if new_n == self.goal_length and 1 - np.exp(log_prob) < self.p_eps:
-            reward = self.student_reward
-            is_done = True
+        # if new_n == self.goal_length and 1 - np.exp(log_prob) < self.p_eps:
+        #     reward = self.student_reward
+        #     is_done = True
+        if 1 - np.exp(log_prob) < self.p_eps:
+            if new_n == self.goal_length:
+                reward = self.student_reward
+                is_done = True
+            elif len(success_states) == 0 or new_n > np.max(success_states):
+                    reward = 1   # intermediate reward boost
+                    success_states = success_states + (new_n,)
+                    # print('REWARDED FOR', new_n)
+                    # print('SUCESS_STATES', success_states)
 
-        return (new_n, new_qr), obs, reward, is_done
+        return (new_n, new_qr, success_states), obs, reward, is_done
 
     # TODO: copied from teacher
     def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
@@ -374,7 +398,7 @@ class TeacherPomcpAgent(Agent):
 
     def _sample_prior(self):
         qr = np.random.normal(scale=0.5, size=self.goal_length)
-        return (1, qr) 
+        return (1, qr, ()) 
 
     def _sample_rollout_policy(self, history):
         return np.random.choice(self.actions)   # TODO: use something better?
@@ -388,17 +412,16 @@ class TeacherPomcpAgent(Agent):
                 state = self._sample_prior()
             else:
                 if np.random.random() < 0.3:   # particle reinvigoration prob
-                    qrs = [qr for _, qr in self.tree[self.history]['b']]
+                    qrs = [state[1] for state in self.tree[self.history]['b']]
                     qrs_mean = np.mean(qrs, axis=0)
                     qrs_cov = np.cov(qrs, rowvar=False)
-                    np.fill_diagonal(qrs_cov, np.clip(np.diag(qrs_cov), 0.2, np.inf))  # boost variance
-
-                    # print('HIST LEN', len(self.tree[self.history]['b']))
-                    # print('QRS_COV', qrs_cov)
-                    # print('QRS_CORR', np.corrcoef(qrs, rowvar=False))
+                    np.fill_diagonal(qrs_cov, np.clip(np.diag(qrs_cov), self.q_reinv_var, np.inf))  # boost variance
                     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
-                    state = (self.tree[self.history]['b'][0][0], new_qrs)
-                    # print('Invigorated', state)
+                    state_idx = np.random.choice(len(self.tree[self.history]['b']))
+
+                    # TODO: confirm that attributes are evolving correctly <-- STOPPED HERE
+                    samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
+                    state = (samp_state[0], new_qrs, samp_state[-1])
                 else:
                     state_idx = np.random.choice(len(self.tree[self.history]['b']))
                     state = self.tree[self.history]['b'][state_idx]
@@ -525,19 +548,19 @@ class TeacherPomcpAgent(Agent):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
 
 
-'''
+# '''
 # <codecell>
-N = 3
-T = 10
+N = 10
+T = 20
 student_lr = 0.005
 p_eps = 0.1
-L = 20
+L = 5
 gamma = 0.95
-es = np.zeros(N) - 0.5
+es = np.zeros(N)
 
 qrs_true = []
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma)
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1000)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
 prev_obs = env.reset()
@@ -546,12 +569,11 @@ is_done = False
 
 
 while not is_done:
-    a = agent.next_action(prev_a, prev_obs)
-    print('Took a:', a)
+    a = agent.next_action(prev_a, prev_obs, with_replicas=0)
 
     state, reward, is_done, _ = env.step(a)
     obs = agent._to_bin(state[1])
-    print('At n:', env.N)
+    print(f'Took a: {a}   At n: {env.N}')
 
     qrs_true.append([env.student.q_r[i] for i in range(N)])
     prev_a = a
@@ -587,16 +609,36 @@ fig.tight_layout()
 
 plt.savefig('fig/pomcp_state_estimate.png')
 
+# <codecell>
+### PLOT REPLICAS
+# stds = np.std(agent.replicas, axis=1)
+reps = np.array(agent.replicas)
+
+counts = np.vstack((
+    np.sum(reps == 0, axis=1),
+    np.sum(reps == 1, axis=1),
+    np.sum(reps == 2, axis=1))).T
+
+freqs = counts / 5
+entr = -freqs * np.log(freqs + 1e-8)
+entr = np.sum(entr, axis=1)
+
+plt.gcf().set_size_inches(8, 3)
+plt.plot(entr)
+plt.title('Entropy of actions across iterations')
+plt.ylabel('Entropy')
+plt.xlabel('Iteration')
+plt.savefig('fig/pomcp_entropy_actions.png')
 
 # %%
 # <codecell>
 ### INVESTIGATE CLOSENESS OF MODEL TO REALITY
-N = 3
-T = 10
+N = 10
+T = 20
 student_lr = 0.005 
 p_eps = 0.1
-L = 20
-es = np.zeros(N) - 2   # TODO: raw conversion seems to cause problems here
+L = 5
+es = np.zeros(N)
 
 agent = TeacherPomcpAgent(goal_length=N, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
@@ -615,9 +657,10 @@ for _ in range(iters):
 
     q_r = env.student.q_r
     n = env.N
+    ss = ()
 
     q_r = [q_r[i] for i in range(N)]
-    (new_n, new_qr), pred_obs, pred_reward = agent._sample_transition((n, q_r), action)
+    (new_n, new_qr, ss), pred_obs, pred_reward, _ = agent._sample_transition((n, q_r, ss), action)
 
     state, reward, _, _ = env.step(action)
 
@@ -625,7 +668,7 @@ for _ in range(iters):
     # print('QR', env.student.q_r)
 
     assert state[0] == new_n
-    assert reward == pred_reward
+    # assert reward == pred_reward
 
     all_pred_qrs.append(new_qr)
     all_pred_obs.append(pred_obs)
