@@ -299,13 +299,14 @@ max_iters = 100000
 # qe_gen = None
 
 N = 10
-T = 20
-student_lr = 0.005
+T = 50
+student_lr = 0.002
 p_eps = 0.1
 L = 5
 pomcp_gamma = 0.95
 es = np.zeros(N)
-n_particles = 1000
+n_particles = 1500
+q_reinv_var = 0.6
 
 teacher_reward = 10
 student_reward = 10
@@ -346,7 +347,7 @@ inc_test = IncrementalTest(N, k=1)
 # heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
-pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma, n_particles=n_particles)
+pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma, n_particles=n_particles, q_reinv_var=q_reinv_var)
 pomcp_test = PomcpTest(pom_teacher, goal_length=N)
 
 for _ in tqdm(range(iters)):

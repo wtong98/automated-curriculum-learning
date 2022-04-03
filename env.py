@@ -551,16 +551,16 @@ class TeacherPomcpAgent(Agent):
 # '''
 # <codecell>
 N = 10
-T = 20
-student_lr = 0.005
+T = 50
+student_lr = 0.002
 p_eps = 0.1
-L = 5
+L = 10
 gamma = 0.95
 es = np.zeros(N)
 
 qrs_true = []
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1000)
+agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1500, q_reinv_var=0.5)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
 prev_obs = env.reset()
@@ -634,8 +634,8 @@ plt.savefig('fig/pomcp_entropy_actions.png')
 # <codecell>
 ### INVESTIGATE CLOSENESS OF MODEL TO REALITY
 N = 10
-T = 20
-student_lr = 0.005 
+T = 50
+student_lr = 0.002
 p_eps = 0.1
 L = 5
 es = np.zeros(N)
