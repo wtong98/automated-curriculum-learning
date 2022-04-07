@@ -548,7 +548,7 @@ class TeacherPomcpAgent(Agent):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
 
 
-# '''
+'''
 # <codecell>
 N = 10
 T = 50

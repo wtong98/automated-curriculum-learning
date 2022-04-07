@@ -398,11 +398,15 @@ for _ in tqdm(range(iters)):
     agent_steps.append(agent_stp)
 
 while len(pomcp_scores) < 5:
+    print('RUNNING POMCP ITER: ', len(pomcp_scores) + 1)
     try:
         pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
         pomcp_scores.append(pomcp_sc)
         pomcp_steps.append(pomcp_stp)
-    except:
+    except Exception as e:
+        if e == KeyboardInterrupt:
+            raise e
+
         print('Run borked!!!')
         continue
         
