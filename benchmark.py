@@ -189,28 +189,55 @@ class PomcpTest:
         prev_a = None
 
         all_steps = []
-        for _ in range(max_iters):
-            a = self.teacher.next_action(prev_a, prev_obs)
-            N = np.clip(N + a - 1, 1, self.goal_length)
-            all_steps.append(N)
+        qrs_true = []
 
-            for _ in range(self.k):
-                student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
+        try:
+            for _ in range(max_iters):
+                a = self.teacher.next_action(prev_a, prev_obs)
+                N = np.clip(N + a - 1, 1, self.goal_length)
+                all_steps.append(N)
 
-            log_p = student.score(N)
-            obs = self.teacher._to_bin(log_p)
+                for _ in range(self.k):
+                    student.learn(BinaryEnv(N, reward=student_reward), max_iters=T)
 
-            self.iter += 1
+                log_p = student.score(N)
+                obs = self.teacher._to_bin(log_p)
 
-            final_score = student.score(self.goal_length)
-            if np.isclose(final_score, 0, atol=1e-1):
-            # if 1 - np.exp(log_p) < 0.1:
-                break
+                self.iter += 1
 
-            prev_a = a
-            prev_obs = obs
+                final_score = student.score(self.goal_length)
+                if np.isclose(final_score, 0, atol=1e-1):
+                    break
+
+                qrs_true.append([student.q_r[i] for i in range(N)])
+                prev_a = a
+                prev_obs = obs
+            
+            return self.iter, all_steps
         
-        return self.iter, all_steps
+        except Exception as e:
+            fig, axs = plt.subplots(2, 1, figsize=(18, 12))
+            agent = self.teacher
+
+            steps = np.arange(len(agent.num_particles))
+
+            for i in range(N):
+                axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
+                axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}')
+
+            axs[0].legend()
+            axs[0].set_xlabel('Step')
+            axs[0].set_ylabel('q')
+
+            axs[1].bar(steps, agent.num_particles)
+            axs[1].set_xlabel('Step')
+            axs[1].set_ylabel('# particles')
+
+            fig.suptitle('State estimates of POMCP agent')
+            fig.tight_layout()
+
+            plt.savefig('fig/pomcp_state_estimate_debug.png')
+            raise e
 
 # # <codecell>
 # # TODO: something wrong with test vs. env runs
@@ -302,11 +329,11 @@ N = 10
 T = 50
 student_lr = 0.002
 p_eps = 0.1
-L = 5
+L = 10
 pomcp_gamma = 0.95
 es = np.zeros(N)
 n_particles = 1500
-q_reinv_var = 0.6
+q_reinv_var = 0.5
 
 teacher_reward = 10
 student_reward = 10
@@ -370,9 +397,14 @@ for _ in tqdm(range(iters)):
     agent_scores.append(agent_sc)
     agent_steps.append(agent_stp)
 
-    pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
-    pomcp_scores.append(pomcp_sc)
-    pomcp_steps.append(pomcp_stp)
+while len(pomcp_scores) < 5:
+    try:
+        pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
+        pomcp_scores.append(pomcp_sc)
+        pomcp_steps.append(pomcp_stp)
+    except:
+        print('Run borked!!!')
+        continue
         
 # %%
 all_scores = [

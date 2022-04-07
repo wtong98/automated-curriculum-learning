@@ -643,7 +643,7 @@ es = np.zeros(N)
 agent = TeacherPomcpAgent(goal_length=N, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
-iters = 20
+iters = 100
 
 all_pred_qrs = []
 all_pred_obs = []
@@ -699,5 +699,4 @@ plt.xlabel('Iteration')
 plt.ylabel('Q')
 plt.savefig('fig/pomcp_debug_state.png')
 
-# %%
 '''
