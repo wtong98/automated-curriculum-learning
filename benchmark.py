@@ -226,7 +226,7 @@ class PomcpTest:
 
             for i in range(N):
                 axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-                axs[0].plot(steps, [q[i] for q in qrs_true[1:], label=f'qr[{i}]', color=f'C{i}')
+                axs[0].plot(steps, [q[i] for q in qrs_true[1:]], label=f'qr[{i}]', color=f'C{i}')
 
             axs[0].legend()
             axs[0].set_xlabel('Step')
@@ -241,24 +241,6 @@ class PomcpTest:
 
             plt.savefig('fig/pomcp_state_estimate_debug.png')
             raise e
-
-# # <codecell>
-# # TODO: something wrong with test vs. env runs
-# N = 2
-# T = 10
-# student_lr = 0.005
-# p_eps = 0.1
-# L = 10
-# gamma = 0.9
-# es = np.zeros(N+1)
-
-# teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma)
-# # env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr)
-# student = Student(lr=student_lr, q_e=es)
-
-# test = PomcpTest(teacher, goal_length=2)
-# test.run(student, T, student_reward=10)
-        
 
 
 def train_teacher(N=10, T=20, bins=20, p_eps=0.1,

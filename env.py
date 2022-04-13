@@ -311,7 +311,6 @@ class TeacherPomcpAgent(Agent):
 
         self.qrs_means = []
         self.qrs_stds = []
-        self.qrs_true = []
         self.num_particles = []
     
 
@@ -327,7 +326,6 @@ class TeacherPomcpAgent(Agent):
             self.num_particles.append(len(qrs))
             self.qrs_means.append(qrs_mean)
             self.qrs_stds.append(qrs_std)
-            # self.qrs_true.append([env.student.q_r[i] for i in range(2)])
             print('N_particles:', len(qrs))
 
         all_a = []
@@ -419,7 +417,6 @@ class TeacherPomcpAgent(Agent):
                     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
                     state_idx = np.random.choice(len(self.tree[self.history]['b']))
 
-                    # TODO: confirm that attributes are evolving correctly <-- STOPPED HERE
                     samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
                     state = (samp_state[0], new_qrs, samp_state[-1])
                 else:
@@ -472,52 +469,16 @@ class TeacherPomcpAgent(Agent):
             next_node['n'] += 1
             node_stack.append(next_node)
             n_visited_stack.append(next_node['n'])
-            # next_node['v'] += (total_reward - next_node['v']) / next_node['n']
 
             history += (a, obs)
             state = next_state
             depth += 1
-            # total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
         
         for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
             total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
             node['v'] += (total_reward - node['v']) / n_visited
 
 
-        # if self.gamma ** depth < self.eps:
-        #     return 0
-        
-        # if history not in self.tree:
-        #     self.tree[history] = self._init_node()
-        #     for a in self.actions:
-        #         proposal = history + (a,)
-        #         self.tree[proposal] = self._init_node()
-        #     return self._rollout(state, history, depth)
-        
-        # vals = []
-        # for a in self.actions:
-        #     curr_node = self.tree[history]
-        #     next_node = self.tree[history + (a,)]
-        #     if curr_node['n'] > 0 and next_node['n'] > 0:
-        #         explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
-        #     else:
-        #         explore = 999  # arbitrarily high
-
-        #     vals.append(next_node['v'] + explore)
-        
-        # a = np.argmax(vals)
-        # next_state, obs, reward = self._sample_transition(state, a)
-        # total_reward = reward + self.gamma * self._simulate(next_state, history + (a, obs), depth + 1)
-
-        # if depth > 0:   # NOTE: avoid re-adding encountered state?
-        #     self.tree[history]['b'].append(state)
-        #     self.tree[history]['n'] += 1
-
-        # next_node = self.tree[history + (a,)]
-        # next_node['n'] += 1
-        # next_node['v'] += (total_reward - next_node['v']) / next_node['n']
-        # return total_reward
-    
     def _rollout(self, state, history, depth):
         g = 1
         total_reward = 0
@@ -536,13 +497,6 @@ class TeacherPomcpAgent(Agent):
         
         return total_reward
 
-        # depth = init_depth
-        # if self.gamma ** depth < self.eps:
-        #     return 0
-        
-        # a = self._sample_rollout_policy(history)
-        # next_state, obs, reward = self._sample_transition(state, a)
-        # return reward + self.gamma * self._rollout(next_state, history + (a, obs), depth + 1)
 
     def learn(self, *args, **kwargs):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
