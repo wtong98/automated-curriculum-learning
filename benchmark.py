@@ -4,6 +4,7 @@ and compared to other training systems
 """
 
 # <codecell>
+import argparse
 import traceback
 import sys
 
@@ -305,21 +306,37 @@ def train_teacher(N=10, T=20, bins=20, p_eps=0.1,
     }
 
 # <codecell>
+parser = argparse.ArgumentParser()
+parser.add_argument('--N', type=int, default=10)
+parser.add_argument('--T', type=int, default=50)
+parser.add_argument('--student_lr', type=float, default=0.002)
+parser.add_argument('--L', type=int, default=10)
+parser.add_argument('--pomcp_gamma', type=float, default=0.95)
+parser.add_argument('--eps_const', type=float, default=0)
+parser.add_argument('--n_particles', type=int, default=1000)
+parser.add_argument('--q_reinv_var', type=float, default=0.5)
+parser.add_argument('--lookahead_cap', type=int, default=1)
+args = parser.parse_args()
+
+# TODO: adapt generated images for multi-args runs
+print('USING ARGS:')
+print(args)
+# <codecell>
 ### TRAIN TEACHER AGENT(S)
 max_iters = 100000
 # qe_gen = lambda: np.random.normal(loc=0, scale=0.5)
 # qe_gen = None
 
-N = 10
-T = 50
-student_lr = 0.002
+N = args.N
+T = args.T
+student_lr = args.student_lr
 p_eps = 0.1
-L = 10
-pomcp_gamma = 0.95
-es = np.zeros(N)
-n_particles = 1000
-q_reinv_var = 0.5
-lookahead_cap = 1
+L = args.L
+pomcp_gamma = args.pomcp_gamma
+es = np.zeros(N) + args.eps_const
+n_particles = args.n_particles
+q_reinv_var = args.q_reinv_var
+lookahead_cap = args.lookahead_cap
 
 teacher_reward = 10
 student_reward = 10
