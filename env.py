@@ -278,12 +278,16 @@ class Teacher(Agent):
 
 
 class TeacherPomcpAgent(Agent):
-    def __init__(self, goal_length, T, bins=10, p_eps=0.05, student_qe=0, student_lr=0.01, student_reward=10, n_particles=500, gamma=0.9, eps=1e-2, explore_factor=1, q_reinv_var=0.3) -> None:
+    def __init__(self, goal_length, T, bins=10, p_eps=0.05, lookahead_cap=None,
+                       student_qe=0, student_lr=0.01, student_reward=10, 
+                       n_particles=500, gamma=0.9, eps=1e-2, 
+                       explore_factor=1, q_reinv_var=0.3) -> None:
         super().__init__()
         self.goal_length = goal_length
         self.T = T
         self.bins = bins
         self.p_eps = p_eps
+        self.lookahead_cap = lookahead_cap
         self.student_qe = student_qe
         self.student_lr = student_lr
         self.student_reward = student_reward
@@ -298,6 +302,7 @@ class TeacherPomcpAgent(Agent):
         self.history = ()
         self.tree = {}
 
+        self.curr_n = 1
         self.qrs_means = []
         self.qrs_stds = []
         self.qrs_true = []
@@ -338,11 +343,17 @@ class TeacherPomcpAgent(Agent):
         a = self._search()
         all_a.append(a)
         self.replicas.append(all_a)
+
+        self.curr_n = np.clip(self.curr_n + a - 1, 1, self.goal_length)  # NOTE: assuming agent follows the proposed action
         return a
 
     def _sample_transition(self, state, action):
         n, qr, success_states = state
-        new_n = np.clip(n + action - 1, 1, self.goal_length)
+        lookahead_len = self.goal_length
+        if self.lookahead_cap != None:
+            lookahead_len = min(self.curr_n + self.lookahead_cap, self.goal_length)
+        
+        new_n = np.clip(n + action - 1, 1, lookahead_len)
 
         qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
         log_trans_probs = [-np.log(1 + np.exp(-q)) for q in qs]
@@ -357,31 +368,22 @@ class TeacherPomcpAgent(Agent):
         new_qr = qr + diff_qs
         new_qs = qs + diff_qs
 
-        # print('---')
-        # print('ACTION', action)
-        # print('ORIG_QR', qr)
-        # print('N_CONTA', num_contacts)
-        # print('DIFF_QS', diff_qs)
-        # print('NEW_QR', new_qr)
-        # print('LR:', self.student_lr)
-
         log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
         obs = self._to_bin(log_prob)
 
         reward = 0
         is_done = False
-        # if new_n == self.goal_length and 1 - np.exp(log_prob) < self.p_eps:
-        #     reward = self.student_reward
-        #     is_done = True
+
         if 1 - np.exp(log_prob) < self.p_eps:
             if new_n == self.goal_length:
                 reward = self.student_reward
                 is_done = True
+            elif new_n == lookahead_len:
+                reward = 1   # intermediate reward boost at lookahead cap
+                is_done = True
             elif len(success_states) == 0 or new_n > np.max(success_states):
-                    reward = 1   # intermediate reward boost
-                    success_states = success_states + (new_n,)
-                    # print('REWARDED FOR', new_n)
-                    # print('SUCESS_STATES', success_states)
+                reward = 0   # intermediate reward boost for successful finish
+                success_states = success_states + (new_n,)
 
         return (new_n, new_qr, success_states), obs, reward, is_done
 
@@ -395,7 +397,7 @@ class TeacherPomcpAgent(Agent):
         return bin_p
 
     def _sample_prior(self):
-        qr = np.random.normal(scale=0.5, size=self.goal_length)
+        qr = np.random.normal(scale=0.1, size=self.goal_length)
         return (1, qr, ()) 
 
     def _sample_rollout_policy(self, history):
@@ -409,7 +411,7 @@ class TeacherPomcpAgent(Agent):
             if len(self.history) == 0:
                 state = self._sample_prior()
             else:
-                if np.random.random() < 0.3:   # particle reinvigoration prob
+                if np.random.random() < 0.25:   # particle reinvigoration prob
                     qrs = [state[1] for state in self.tree[self.history]['b']]
                     qrs_mean = np.mean(qrs, axis=0)
                     qrs_cov = np.cov(qrs, rowvar=False)
@@ -510,11 +512,13 @@ student_lr = 0.002
 p_eps = 0.1
 L = 10
 gamma = 0.95
-es = np.zeros(N)
+lookahead_cap = 1
+q_reinv_var = 0.3
+es = np.zeros(N) - 1
 
 qrs_true = []
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1500, q_reinv_var=0.5)
+agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1000, q_reinv_var=q_reinv_var)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
 prev_obs = env.reset()
@@ -529,6 +533,8 @@ while not is_done:
     obs = agent._to_bin(state[1])
     print(f'Took a: {a}   At n: {env.N}')
 
+    assert agent.curr_n == env.N
+
     qrs_true.append([env.student.q_r[i] for i in range(N)])
     prev_a = a
     prev_obs = obs
@@ -538,18 +544,14 @@ print('Great success!')
 
 # <codecell>
 ### PLOT RUN DIAGNOSTICS
-fig, axs = plt.subplots(2, 1, figsize=(6, 6))
+fig, axs = plt.subplots(2, 1, figsize=(12, 12))
 
 steps = np.arange(len(agent.num_particles))
 
-for i in range(N):
+for i in range(6, 10):
     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-    axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}')
+    axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
 
-# axs[0].errorbar(steps, [q[0] for q in agent.qrs_means], yerr=[2 * s[0] for s in agent.qrs_stds], label='Pred qr[0]')
-# axs[0].errorbar(steps, [q[1] for q in agent.qrs_means], yerr=[2 * s[1] for s in agent.qrs_stds], label='Pred qr[1]', color='C0')
-# axs[0].plot(steps, [q[0] for q in qrs_true], label='True qr[0]')
-# axs[0].plot(steps, [q[1] for q in qrs_true], label='True qr[1]', color='C1')
 axs[0].legend()
 axs[0].set_xlabel('Step')
 axs[0].set_ylabel('q')
@@ -591,10 +593,10 @@ N = 10
 T = 50
 student_lr = 0.002
 p_eps = 0.1
-L = 5
+L = 10
 es = np.zeros(N)
 
-agent = TeacherPomcpAgent(goal_length=N, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
+agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
 env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
 
 iters = 100
@@ -621,8 +623,8 @@ for _ in range(iters):
     # print('-T-R-U-E-')
     # print('QR', env.student.q_r)
 
-    assert state[0] == new_n
-    # assert reward == pred_reward
+    # assert state[0] == new_n       <-- violated by lookahead caps
+    # assert reward == pred_reward   <-- violated by intermediate rewards
 
     all_pred_qrs.append(new_qr)
     all_pred_obs.append(pred_obs)
