@@ -548,7 +548,7 @@ fig, axs = plt.subplots(2, 1, figsize=(12, 12))
 
 steps = np.arange(len(agent.num_particles))
 
-for i in range(6, 10):
+for i in range(0, 3):
     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
     axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
 

@@ -226,7 +226,7 @@ class PomcpTest:
 
             for i in range(N):
                 axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-                axs[0].plot(steps, [q[i] for q in qrs_true[1:]], label=f'qr[{i}]', color=f'C{i}')
+                axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}')
 
             axs[0].legend()
             axs[0].set_xlabel('Step')
@@ -319,6 +319,7 @@ pomcp_gamma = 0.95
 es = np.zeros(N)
 n_particles = 1000
 q_reinv_var = 0.5
+lookahead_cap = 1
 
 teacher_reward = 10
 student_reward = 10
@@ -359,7 +360,7 @@ inc_test = IncrementalTest(N, k=1)
 # heuristic_test = TeacherHeuristicTest(N, k=5)
 agent_test = TeacherAgentTest(results['teacher'], N, k=1)
 
-pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma, n_particles=n_particles, q_reinv_var=q_reinv_var)
+pom_teacher = TeacherPomcpAgent(goal_length=N, T=T, bins=L, p_eps=p_eps, lookahead_cap=lookahead_cap, student_qe=es, student_lr=student_lr, gamma=pomcp_gamma, n_particles=n_particles, q_reinv_var=q_reinv_var)
 pomcp_test = PomcpTest(pom_teacher, goal_length=N)
 
 for _ in tqdm(range(iters)):
