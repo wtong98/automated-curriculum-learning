@@ -4,6 +4,9 @@ and compared to other training systems
 """
 
 # <codecell>
+import traceback
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import linregress
@@ -223,7 +226,7 @@ class PomcpTest:
 
             for i in range(N):
                 axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-                axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}')
+                axs[0].plot(steps, [q[i] for q in qrs_true[1:], label=f'qr[{i}]', color=f'C{i}')
 
             axs[0].legend()
             axs[0].set_xlabel('Step')
@@ -332,7 +335,7 @@ p_eps = 0.1
 L = 10
 pomcp_gamma = 0.95
 es = np.zeros(N)
-n_particles = 1500
+n_particles = 1000
 q_reinv_var = 0.5
 
 teacher_reward = 10
@@ -399,6 +402,8 @@ for _ in tqdm(range(iters)):
 
 while len(pomcp_scores) < 5:
     print('RUNNING POMCP ITER: ', len(pomcp_scores) + 1)
+    sys.stdout.flush()
+    sys.stderr.flush()
     try:
         pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
         pomcp_scores.append(pomcp_sc)
@@ -407,7 +412,9 @@ while len(pomcp_scores) < 5:
         if e == KeyboardInterrupt:
             raise e
 
-        print('Run borked!!!')
+        print('Run borked!!!', file=sys.stderr)
+        print('Err:', e, file=sys.stderr)
+        traceback.print_exc()
         continue
         
 # %%
