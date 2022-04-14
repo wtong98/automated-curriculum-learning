@@ -305,7 +305,6 @@ class TeacherPomcpAgent(Agent):
         self.curr_n = 1
         self.qrs_means = []
         self.qrs_stds = []
-        self.qrs_true = []
         self.num_particles = []
         self.replicas = []
     
@@ -317,6 +316,7 @@ class TeacherPomcpAgent(Agent):
         self.qrs_means = []
         self.qrs_stds = []
         self.num_particles = []
+        self.curr_n = 1
     
 
     def next_action(self, prev_action=None, obs=None, with_replicas=0):
