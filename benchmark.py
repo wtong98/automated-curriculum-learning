@@ -5,8 +5,10 @@ and compared to other training systems
 
 # <codecell>
 import argparse
-import traceback
+import random
 import sys
+import traceback
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -184,7 +186,7 @@ class PomcpTest:
         self.goal_length = goal_length
         self.k = k
     
-    def run(self, student, T, max_iters=1000, student_reward=1):
+    def run(self, student, T, max_iters=1000, student_reward=1, fig_dir=None):
         self.teacher.reset()
         self.iter = 0
         N = 1
@@ -216,31 +218,56 @@ class PomcpTest:
                 qrs_true.append([student.q_r[i] for i in range(N)])
                 prev_a = a
                 prev_obs = obs
+
+            # PLOT RUN DIAGNOSTICS
+            if fig_dir != None:
+                agent = self.teacher
+                fig, axs = plt.subplots(2, 1, figsize=(12, 12))
+                steps = np.arange(len(agent.num_particles))
+
+                for i in range(N):
+                    axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
+                    axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
+
+                axs[0].legend()
+                axs[0].set_xlabel('Step')
+                axs[0].set_ylabel('q')
+
+                axs[1].bar(steps, agent.num_particles)
+                axs[1].set_xlabel('Step')
+                axs[1].set_ylabel('# particles')
+
+                fig.suptitle('State estimates of POMCP agent')
+                fig.tight_layout()
+
+                rand_int = random.randrange(0, 10**5)
+                plt.savefig(fig_dir / f'pomcp_state_estimate_{rand_int}.png')
             
             return self.iter, all_steps
         
         except Exception as e:
-            fig, axs = plt.subplots(2, 1, figsize=(18, 12))
-            agent = self.teacher
+            # fig, axs = plt.subplots(2, 1, figsize=(18, 12))
+            # agent = self.teacher
 
-            steps = np.arange(len(agent.num_particles))
+            # steps = np.arange(len(agent.num_particles))
 
-            for i in range(N):
-                axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-                axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}')
+            # for i in range(N):
+            #     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
+            #     axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}')
 
-            axs[0].legend()
-            axs[0].set_xlabel('Step')
-            axs[0].set_ylabel('q')
+            # axs[0].legend()
+            # axs[0].set_xlabel('Step')
+            # axs[0].set_ylabel('q')
 
-            axs[1].bar(steps, agent.num_particles)
-            axs[1].set_xlabel('Step')
-            axs[1].set_ylabel('# particles')
+            # axs[1].bar(steps, agent.num_particles)
+            # axs[1].set_xlabel('Step')
+            # axs[1].set_ylabel('# particles')
 
-            fig.suptitle('State estimates of POMCP agent')
-            fig.tight_layout()
+            # fig.suptitle('State estimates of POMCP agent')
+            # fig.tight_layout()
 
-            plt.savefig('fig/pomcp_state_estimate_debug.png')
+            # plt.savefig('fig/pomcp_state_estimate_debug.png')
+            # TODO: save some extra info
             raise e
 
 
@@ -316,6 +343,7 @@ parser.add_argument('--eps_const', type=float, default=0)
 parser.add_argument('--n_particles', type=int, default=1000)
 parser.add_argument('--q_reinv_var', type=float, default=0.5)
 parser.add_argument('--lookahead_cap', type=int, default=1)
+parser.add_argument('--name', type=str, default='test')
 args = parser.parse_args()
 
 # TODO: adapt generated images for multi-args runs
@@ -338,6 +366,10 @@ n_particles = args.n_particles
 q_reinv_var = args.q_reinv_var
 lookahead_cap = args.lookahead_cap
 
+fig_dir = Path(f'fig/{args.name}')
+if not fig_dir.exists():
+    fig_dir.mkdir(parent=True)
+
 teacher_reward = 10
 student_reward = 10
 
@@ -354,7 +386,7 @@ plt.plot(results['avg_time_to_comp'], '--o')
 plt.title('Average time to completion')
 plt.xlabel('Time')
 plt.ylabel('Iterations')
-plt.savefig('fig/teacher_average_ttc.png')
+plt.savefig(fig_dir / 'aveage_ttc.png')
 
 # <codecell>
 ### GATHER PERFORMANCE METRICS
@@ -400,10 +432,14 @@ for _ in tqdm(range(iters)):
     agent_scores.append(agent_sc)
     agent_steps.append(agent_stp)
 
+total_runs = 0
+failed_runs = 0
+
 while len(pomcp_scores) < 5:
     print('RUNNING POMCP ITER: ', len(pomcp_scores) + 1)
     sys.stdout.flush()
     sys.stderr.flush()
+    total_runs += 1
     try:
         pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
         pomcp_scores.append(pomcp_sc)
@@ -415,7 +451,10 @@ while len(pomcp_scores) < 5:
         print('Run borked!!!', file=sys.stderr)
         print('Err:', e, file=sys.stderr)
         traceback.print_exc()
+        failed_runs += 1
         continue
+
+print(f'***RUN FAILURE RATE: {failed_runs / total_runs:.2f}')
         
 # %%
 all_scores = [
@@ -443,7 +482,7 @@ all_means = [np.mean(score) for score in all_scores]
 all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
-plt.savefig('fig/acl_method_comparison_n_10_eps_0.png')
+plt.savefig(fig_dir / 'acl_method_comparison.png')
 
 
 '''
@@ -564,5 +603,5 @@ for i, steps in enumerate(pomcp_steps):
 
 fig.tight_layout()
 
-plt.savefig('fig/acl_steps_taken.png')
+plt.savefig(fig_dir / 'acl_steps_taken.png')
 # %%
