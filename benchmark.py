@@ -215,7 +215,7 @@ class PomcpTest:
                 if np.isclose(final_score, 0, atol=1e-1):
                     break
 
-                qrs_true.append([student.q_r[i] for i in range(N)])
+                qrs_true.append([student.q_r[i] for i in range(self.goal_length)])
                 prev_a = a
                 prev_obs = obs
 
@@ -225,7 +225,7 @@ class PomcpTest:
                 fig, axs = plt.subplots(2, 1, figsize=(12, 12))
                 steps = np.arange(len(agent.num_particles))
 
-                for i in range(N):
+                for i in range(self.goal_length):
                     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
                     axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
 
@@ -368,7 +368,7 @@ lookahead_cap = args.lookahead_cap
 
 fig_dir = Path(f'fig/{args.name}')
 if not fig_dir.exists():
-    fig_dir.mkdir(parent=True)
+    fig_dir.mkdir(parents=True)
 
 teacher_reward = 10
 student_reward = 10
@@ -386,7 +386,8 @@ plt.plot(results['avg_time_to_comp'], '--o')
 plt.title('Average time to completion')
 plt.xlabel('Time')
 plt.ylabel('Iterations')
-plt.savefig(fig_dir / 'aveage_ttc.png')
+plt.savefig(fig_dir / 'average_ttc.png')
+plt.clf()
 
 # <codecell>
 ### GATHER PERFORMANCE METRICS
@@ -441,7 +442,7 @@ while len(pomcp_scores) < 5:
     sys.stderr.flush()
     total_runs += 1
     try:
-        pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward)
+        pomcp_sc, pomcp_stp = pomcp_test.run(Student(lr=student_lr, q_e=es), T, max_iters=10000, student_reward=student_reward, fig_dir=fig_dir)
         pomcp_scores.append(pomcp_sc)
         pomcp_steps.append(pomcp_stp)
     except Exception as e:
@@ -483,7 +484,7 @@ all_se = [2 * np.std(score) / np.sqrt(iters) for score in all_scores]
 
 plt.bar(np.arange(len(all_scores)), height=all_means, yerr=all_se, tick_label=labels)
 plt.savefig(fig_dir / 'acl_method_comparison.png')
-
+plt.clf()
 
 '''
 # <codecell>
@@ -574,10 +575,12 @@ plt.savefig('fig/acl_heuristic_learning_curves.png')
 # <codecell>
 ### PLOTTING STEPS
 fig, axs = plt.subplots(3, 1, figsize=(6, 5))
+max_steps = len(max(agent_steps, key=len))
+max_steps += 10
 
 for i, steps in enumerate(inc_steps):
     axs[0].set_title('Incremental')
-    axs[0].set_xlim(0, 250)
+    axs[0].set_xlim(0, max_steps)
     if i == 0:
         axs[0].plot(steps, label='Incremental', alpha=0.6, color='C0')
     else:
@@ -587,7 +590,7 @@ for i, steps in enumerate(agent_steps):
     # if len(steps) > 500:
     #     steps = steps[:100]
     axs[1].set_title('SARSA Agent')
-    axs[1].set_xlim(0, 250)
+    axs[1].set_xlim(0, max_steps)
     if i == 0:
         axs[1].plot(steps, label='Agent', alpha=0.6, color='C1')
     else:
@@ -595,7 +598,7 @@ for i, steps in enumerate(agent_steps):
 
 for i, steps in enumerate(pomcp_steps):
     axs[2].set_title('POMCP')
-    axs[2].set_xlim(0, 250)
+    axs[2].set_xlim(0, max_steps)
     if i == 0:
         axs[2].plot(steps, label='Agent', alpha=0.6, color='C2')
     else:
@@ -604,4 +607,5 @@ for i, steps in enumerate(pomcp_steps):
 fig.tight_layout()
 
 plt.savefig(fig_dir / 'acl_steps_taken.png')
+plt.clf()
 # %%
