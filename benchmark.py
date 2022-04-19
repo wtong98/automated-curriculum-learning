@@ -242,7 +242,8 @@ class PomcpTest:
 
                 rand_int = random.randrange(0, 10**5)
                 plt.savefig(fig_dir / f'pomcp_state_estimate_{rand_int}.png')
-            
+                plt.clf()
+                
             return self.iter, all_steps
         
         except Exception as e:
@@ -575,8 +576,8 @@ plt.savefig('fig/acl_heuristic_learning_curves.png')
 # <codecell>
 ### PLOTTING STEPS
 fig, axs = plt.subplots(3, 1, figsize=(6, 5))
-max_steps = len(max(agent_steps, key=len))
-max_steps += 10
+max_steps = len(max(pomcp_steps, key=len))
+max_steps = int(max_steps * 1.2)
 
 for i, steps in enumerate(inc_steps):
     axs[0].set_title('Incremental')
