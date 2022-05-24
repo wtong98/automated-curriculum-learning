@@ -48,12 +48,12 @@ class BinaryEnv(gym.Env):
 
 
 class CurriculumEnv(gym.Env):
-    def __init__(self, goal_length, train_iter, 
+    def __init__(self, goal_length=10, train_iter=50, 
                  p_eps=0.05, 
                  teacher_reward=1,
                  student_reward=1,
                  student_qe_dist=None,
-                 **student_args):
+                 student_params=None):
         super().__init__()
 
         self.student = None
@@ -70,7 +70,7 @@ class CurriculumEnv(gym.Env):
         self.N = 1
 
         self.action_space = gym.spaces.Discrete(3)
-        self.student_args = student_args
+        self.student_params = student_params if student_params != None else {}
     
     def step(self, action):
         d_length = action - 1
@@ -90,15 +90,15 @@ class CurriculumEnv(gym.Env):
     
     def reset(self):
         if self.student_qe_dist == None:
-            self.student = Student(**self.student_args)
+            self.student = Student(**self.student_params)
         else:
             if type(self.student_qe_dist) == int or type(self.student_qe_dist) == float:
-                qe_val = np.random.normal(0, self.student_qe_dist)
+                qe_val = self.student_qe_dist
             else:
                 qe_val = self.student_qe_dist()
 
             q_e = defaultdict(lambda: qe_val)
-            self.student = Student(q_e=q_e, **self.student_args)
+            self.student = Student(q_e=q_e, **self.student_params)
 
         student_score = self._get_score(self.goal_length, train=False)
         self.N  = 1
@@ -176,7 +176,7 @@ class Student(Agent):
             exp_q = 0
         else:
             _, prob = self.policy(next_state)
-            exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])  # TODO: double-check
+            exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
 
     def score(self, goal_state) -> float:
