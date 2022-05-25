@@ -176,7 +176,8 @@ class Student(Agent):
             exp_q = 0
         else:
             _, prob = self.policy(next_state)
-            exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])
+            # exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])
+            exp_q = prob * self.q_r[next_state]
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
 
     def score(self, goal_state) -> float:

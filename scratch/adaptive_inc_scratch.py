@@ -105,7 +105,7 @@ class TeacherAdaptiveIncremental(Agent):
         self.log_qe_est = None
 
 
-def run_hasty(eps=0, tau=0.45, with_perf_pen=True, goal_length=50, max_steps=1000):
+def run_hasty(eps=0, tau=0.45, with_perf_pen=True, goal_length=50, max_steps=5000):
     teacher = TeacherHastyIncremental(target_threshold=tau, with_perf_penalty=with_perf_pen)
     env = MultistepCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps)
     traj = [env.N]
@@ -123,7 +123,7 @@ def run_hasty(eps=0, tau=0.45, with_perf_pen=True, goal_length=50, max_steps=100
     return traj
 
 
-def run_adaptive(eps=0, tau=0.45, goal_length=50, max_steps=1000):
+def run_adaptive(eps=0, tau=0.45, goal_length=50, max_steps=5000):
     teacher = TeacherAdaptiveIncremental(target_threshold=tau)
     env = MultistepCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps)
     traj = [env.N]
@@ -141,7 +141,7 @@ def run_adaptive(eps=0, tau=0.45, goal_length=50, max_steps=1000):
     return traj
 
 
-def run_incremental(eps=0, goal_length=50, max_steps=1000):
+def run_incremental(eps=0, goal_length=50, max_steps=5000):
     env = MultistepCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps)
     env.reset()
     traj = [env.N]
@@ -162,7 +162,7 @@ def run_incremental(eps=0, goal_length=50, max_steps=1000):
     return traj
 
 
-def run_baseline(goal_length=50, max_steps=1000):
+def run_baseline(goal_length=50, max_steps=5000):
     env = MultistepCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps)
     env.reset()
     traj = [env.N]
@@ -184,15 +184,9 @@ def sig(x):
 
 # <codecell>
 n_iters = 5
-eps = 1
-tau = 0.1
-# tau = sig(eps) ** 1.5
-# tau_ = np.exp(-0.05) * sig(eps) ** 2
-# tau_ = np.exp(-0.05) * sig(eps)
-# tau_ = 0.62
-# tau_ = np.exp(-0.05) * 1/(1 + np.exp(-eps))
-# tau_ = tau * np.exp(-0.05)
-# tau_ = tau
+eps = 2
+tau = 0.85
+# tau = np.exp(-0.05) * sig(eps)
 
 all_hty_runs = []
 all_adp_runs = []
@@ -206,34 +200,33 @@ for _ in range(n_iters):
     all_baseline_runs.append(run_baseline())
 
 # %%
+fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+
 label = {'label': 'Hasty'}
 for run in all_hty_runs:
-    plt.plot(run, color='C0', alpha=0.7, **label)
-    label = {}
-
-label = {'label': 'Incremental'}
-for run in all_inc_runs:
-    plt.plot(run, color='C1', alpha=0.7, **label)
+    axs[0].plot(run, color='C0', alpha=0.7, **label)
     label = {}
 
 label = {'label': 'Adaptive'}
 for run in all_adp_runs:
-    plt.plot(np.array(run) + 0.5, color='C2', alpha=0.7, **label)
+    axs[0].plot(np.array(run) + 0.5, color='C2', alpha=0.7, **label)
+    label = {}
+
+label = {'label': 'Incremental'}
+for run in all_inc_runs:
+    axs[0].plot(run, color='C1', alpha=0.7, **label)
     label = {}
 
 label = {'label': 'Baseline'}
 for run in all_baseline_runs:
-    plt.plot(np.array(run) + 0.5, color='C3', alpha=0.7, **label)
+    axs[0].plot(np.array(run) + 0.5, color='C3', alpha=0.7, **label)
     label = {}
 
-plt.legend()
-plt.xlabel('Iteration')
-plt.ylabel('N')
-plt.title(f'Epsilon = {eps}, Tau = {tau}')
+axs[0].legend()
+axs[0].set_xlabel('Iteration')
+axs[0].set_ylabel('N')
 
-# plt.savefig(f'../fig/eps_{eps}_tau_{tau}.png')
 
-# %%
 hty_lens = [len(x) for x in all_hty_runs]
 adp_lens = [len(x) for x in all_adp_runs]
 inc_lens = [len(x) for x in all_inc_runs]
@@ -249,6 +242,14 @@ serr_adp = 2 * np.std(adp_lens) / np.sqrt(n_iters)
 serr_inc = 2 * np.std(inc_lens) / np.sqrt(n_iters)
 serr_bas = 2 * np.std(bas_lens) / np.sqrt(n_iters)
 
-plt.bar(np.arange(4), [mean_hty, mean_adp, mean_inc, mean_bas], tick_label=['Hasty', 'Adaptive', 'Incremental', 'Baseline'], yerr=[serr_hty, serr_adp, serr_inc, serr_bas])
+axs[1].bar(np.arange(4), [mean_hty, mean_adp, mean_inc, mean_bas], tick_label=['Hasty', 'Adaptive', 'Incremental', 'Baseline'], yerr=[serr_hty, serr_adp, serr_inc, serr_bas])
+axs[1].set_ylabel('Iterations')
+
+fig.suptitle(f'Epsilon = {eps}, Tau = {tau}')
+fig.tight_layout()
+
+# plt.savefig(f'../fig/eps_{eps}_tau_{tau}.png')
+
+# %%
 
 # %%
