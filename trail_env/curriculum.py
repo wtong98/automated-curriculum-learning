@@ -7,6 +7,8 @@ author: William Tong (wtong@g.harvard.edu)
 import numpy as np
 
 from stable_baselines3.common.callbacks import BaseCallback
+
+from env import TrailEnv
 from trail_map import MeanderTrail
 
 class CurriculumCallback(BaseCallback):
@@ -162,12 +164,12 @@ class IncrementalTeacher(Teacher):
 
 
 class RandomTeacher(Teacher):
-    def __init__(self, env_class, target_env=None, **teacher_kwargs):  # TODO: env_class is hacky -- fix imports
+    def __init__(self, target_env=None, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.prob_threshold = 0.9
 
         if target_env == None:
-            target_env = env_class(MeanderTrail(length=self.length_schedule[-1], **self.trail_args))
+            target_env = TrailEnv(MeanderTrail(length=self.length_schedule[-1], **self.trail_args))
         self.target_env = target_env
     
     def _update_sched_idx(self):
