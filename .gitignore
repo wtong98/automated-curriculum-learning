@@ -1,3 +1,4 @@
 __pycache__/
-fig/*
+fig/
 *.pkl
+*.png

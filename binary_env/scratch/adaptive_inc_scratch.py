@@ -3,6 +3,8 @@ Experimenting with adaptive incremental strategies
 """
 
 # <codecell>
+from collections import namedtuple
+from curses import ALL_MOUSE_EVENTS
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,10 +23,12 @@ class MultistepCurriculumEnv(CurriculumEnv):
     def step(self, action):
         action = int(action)
 
-        if action <= self.max_step:
-            d_length = action
-        else:
-            d_length = self.max_step - action
+        # TODO: anarchy mode _\m/
+        d_length = action
+        # if action <= self.max_step:
+        #     d_length = action
+        # else:
+        #     d_length = self.max_step - action
 
         self.N = np.clip(self.N + d_length, 1, self.goal_length)
         log_prob = self._get_score(self.N)  # TODO: update log-prob style in parent
@@ -184,71 +188,49 @@ def sig(x):
 
 # <codecell>
 n_iters = 5
-eps = 2
-tau = 0.85
-# tau = np.exp(-0.05) * sig(eps)
+max_steps = 5000
+eps = 6.5
+tau = np.exp(-0.05) * sig(eps)
+tau = 0.5
 
-all_hty_runs = []
-all_adp_runs = []
-all_inc_runs = []
-all_baseline_runs = []
+Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
-for _ in range(n_iters):
-    all_hty_runs.append(run_hasty(eps=eps, tau=tau))
-    all_adp_runs.append(run_adaptive(eps=eps, tau=tau))
-    all_inc_runs.append(run_incremental(eps=eps))
-    all_baseline_runs.append(run_baseline())
+cases = [
+    Case('Hasty', run_hasty, {'eps': eps, 'tau': tau}, []),
+    Case('Adaptive', run_adaptive, {'eps': eps, 'tau': tau}, []),
+    Case('Vanilla', run_incremental, {'eps': eps}, []),
+    # Case('Baseline', run_baseline, {}, [])
+]
+
+for _ in tqdm(range(n_iters)):
+    for case in cases:
+        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
 
 # %%
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
-label = {'label': 'Hasty'}
-for run in all_hty_runs:
-    axs[0].plot(run, color='C0', alpha=0.7, **label)
-    label = {}
-
-label = {'label': 'Adaptive'}
-for run in all_adp_runs:
-    axs[0].plot(np.array(run) + 0.5, color='C2', alpha=0.7, **label)
-    label = {}
-
-label = {'label': 'Incremental'}
-for run in all_inc_runs:
-    axs[0].plot(run, color='C1', alpha=0.7, **label)
-    label = {}
-
-label = {'label': 'Baseline'}
-for run in all_baseline_runs:
-    axs[0].plot(np.array(run) + 0.5, color='C3', alpha=0.7, **label)
-    label = {}
+for i, case in enumerate(cases):
+    label = {'label': case.name}
+    for run in case.runs:
+        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        label = {}
 
 axs[0].legend()
 axs[0].set_xlabel('Iteration')
 axs[0].set_ylabel('N')
 
+all_lens = [[len(run) for run in case.runs] for case in cases]
+all_means = [np.mean(lens) for lens in all_lens]
+all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+all_names = [case.name for case in cases]
 
-hty_lens = [len(x) for x in all_hty_runs]
-adp_lens = [len(x) for x in all_adp_runs]
-inc_lens = [len(x) for x in all_inc_runs]
-bas_lens = [len(x) for x in all_baseline_runs]
-
-mean_hty = np.mean(hty_lens)
-mean_adp = np.mean(adp_lens)
-mean_inc = np.mean(inc_lens)
-mean_bas = np.mean(bas_lens)
-
-serr_hty = 2 * np.std(hty_lens) / np.sqrt(n_iters)
-serr_adp = 2 * np.std(adp_lens) / np.sqrt(n_iters)
-serr_inc = 2 * np.std(inc_lens) / np.sqrt(n_iters)
-serr_bas = 2 * np.std(bas_lens) / np.sqrt(n_iters)
-
-axs[1].bar(np.arange(4), [mean_hty, mean_adp, mean_inc, mean_bas], tick_label=['Hasty', 'Adaptive', 'Incremental', 'Baseline'], yerr=[serr_hty, serr_adp, serr_inc, serr_bas])
+axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
 axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon = {eps}, Tau = {tau}')
 fig.tight_layout()
 
-# plt.savefig(f'../fig/eps_{eps}_tau_{tau}.png')
+# plt.savefig(f'../fig/eps_{eps}_tau_{tau:.2f}.png')
 
 # %%
 

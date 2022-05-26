@@ -6,7 +6,10 @@ Scratchwork when developing POMCP agent
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ..env import *
+import sys
+sys.path.append('../')
+
+from env import *
 
 # <codecell>
 N = 5
@@ -16,13 +19,18 @@ p_eps = 0.1
 L = 10
 gamma = 0.95
 lookahead_cap = 1
-q_reinv_scale = 5   # Should be scaled adaptively?
+q_reinv_scale = 3   # Should be scaled adaptively?
+q_reinv_prob = 0.25
+
 es = np.zeros(N)
 
 qrs_true = []
 
-agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, n_particles=1500, q_reinv_scale=q_reinv_scale)
-env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
+agent = TeacherPomcpAgent(goal_length=N, 
+                          lookahead_cap=lookahead_cap, 
+                          T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, 
+                          n_particles=1500, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
+env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_params={'lr': student_lr, 'q_e': es})
 
 prev_obs = env.reset()
 prev_a = None
@@ -66,7 +74,7 @@ axs[1].set_ylabel('# particles')
 fig.suptitle('State estimates of POMCP agent')
 fig.tight_layout()
 
-plt.savefig('fig/pomcp_state_estimate.png')
+plt.savefig('../fig/pomcp_state_estimate.png')
 
 # <codecell>
 ### PLOT REPLICAS
