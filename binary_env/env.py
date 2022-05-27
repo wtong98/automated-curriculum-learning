@@ -231,7 +231,6 @@ class Teacher(Agent):
             print('qs:', qs)
             raise e
 
-
     def update(self, old_state, action, reward, next_state, is_done):
         old_state = self._to_bin(old_state)
         next_state = self._to_bin(next_state)
