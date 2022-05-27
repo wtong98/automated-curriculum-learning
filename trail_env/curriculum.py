@@ -12,10 +12,11 @@ from env import TrailEnv
 from trail_map import MeanderTrail
 
 class CurriculumCallback(BaseCallback):
-    def __init__(self, teacher, eval_env = None, verbose: int = 0):
+    def __init__(self, teacher, eval_env = None, verbose: int = 0, next_lesson_callbacks=None):
         super().__init__(verbose=verbose)
         self.eval_env = eval_env
         self.teacher = teacher
+        self.next_lesson_callbacks = next_lesson_callbacks or []
 
         self.curr_iter = 0
         self.curr_gen = 0
@@ -32,6 +33,9 @@ class CurriculumCallback(BaseCallback):
     def _on_step(self) -> bool:
         self.curr_iter += 1
         if self.curr_iter > self.curr_ckpt['iters']:
+            for cb in self.next_lesson_callbacks:
+                cb(self)
+
             try:
                 self.curr_ckpt = self.teacher.next_checkpoint()
             except StopIteration:
@@ -89,7 +93,7 @@ class Teacher:
             'range': (-np.pi / 3, np.pi / 3)
         }
 
-        self.length_schedule = len_sched if len_sched != None else [10, 20, 30]
+        self.length_schedule = len_sched if type(len_sched) != type(None) else [10, 20, 30]
         self.sched_idx = 0
 
         self.n_iters_per_ckpt = 1000
@@ -114,7 +118,7 @@ class Teacher:
             raise Exception('student or eval_env not initialized: load_student() with student and eval_env objects')
         
         if not self.fresh:
-            success_prob = self._test_student(self.student, self.eval_env)
+            success_prob = self._test_student(self.eval_env)
             self.trajectory.append((self.sched_idx, success_prob))
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
@@ -131,14 +135,14 @@ class Teacher:
     def _update_sched_idx(self):
         raise NotImplementedError('implement _update_sched_idx() in child class')
 
-    def _test_student(self, student, env):
+    def _test_student(self, env):
         total_success = 0
 
         for _ in range(self.n_test_episodes):
             is_done = False
             obs = env.reset()
             while not is_done:
-                action, _ = student.predict(obs, deterministic=True)
+                action, _ = self.student.predict(obs, deterministic=True)
                 obs, _, is_done, info = env.step(action)
                 is_success = info['is_success']
             
@@ -175,7 +179,7 @@ class RandomTeacher(Teacher):
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
         if prob > self.prob_threshold:
-            target_prob = self._test_student(self.student, self.target_env)
+            target_prob = self._test_student(self.target_env)
             if target_prob > self.prob_threshold:
                 raise StopIteration
         
