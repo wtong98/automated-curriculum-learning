@@ -1,5 +1,5 @@
 """
-Experimenting with uncertainty and the teacher
+Experimenting with unconfidence and the teacher
 """
 
 # <codecell>
@@ -49,27 +49,27 @@ class UncertainCurriculumEnv(CurriculumEnv):
 
 
 class TeacherUncertainIncremental(Agent):
-    def __init__(self, p_eps=0.05, certainty=0.75, max_k_factor=1.5) -> None:
+    def __init__(self, p_eps=0.05, confidence=0.95, max_m_factor=3) -> None:
         super().__init__()
         self.p_eps = p_eps
         self.success_prob = np.exp(-p_eps)
-        self.certainty = certainty
+        self.confidence = confidence
         self.student_traj = []
 
-        raw_min_k = np.log(1 - certainty) / (-p_eps) - 1
-        self.min_k = int(np.floor(raw_min_k))
-        self.max_k = int(self.min_k * max_k_factor)
+        raw_min_m = np.log(1 - confidence) / (-p_eps) - 1
+        self.min_m = int(np.floor(raw_min_m))
+        self.max_m = int(self.min_m * max_m_factor)
     
     def next_action(self, state):
         _, trans = state
         self.student_traj.extend(trans)
 
-        for k in range(self.min_k, self.max_k + 1):
+        for k in range(self.min_m, self.max_m + 1):
             if k >= len(self.student_traj):
                 return 0
 
             prob_good = self._get_prob_good(self.student_traj[-k:])
-            if prob_good >= self.certainty:
+            if prob_good >= self.confidence:
                 return 1
 
         return 0
@@ -89,6 +89,60 @@ class TeacherUncertainIncremental(Agent):
     def reset(self):
         self.student_traj = []
 
+
+class TeacherUncertainHasty(Agent):
+    def __init__(self, target_threshold=0.5, confidence=0.95, max_k=10, max_m=100, n_particles=1000, eps_prior=None):
+        self.target_threshold = target_threshold
+        self.confidence = confidence
+        self.max_k = max_k
+        self.max_m = max_m
+        self.n_particles=n_particles
+        self.eps_prior = eps_prior or np.random.randn
+        self.student_traj = []
+
+    def next_action(self, state):
+        _, history = state
+        self.student_traj.extend(history)
+
+        max_thresh = self._get_max_thresh()
+        for k in range(1, self.max_k):
+            conf = self._sim_prob(k, max_thresh)
+            if conf < self.confidence:
+                k -= 1
+                break
+        
+        return k
+    
+    def _get_max_thresh(self):
+        max_thresh = 1e-8
+        n_success = 0
+        n_fail = 0
+
+        for result in self.student_traj[-self.max_m::][::-1]:
+            if result == 1:
+                n_success += 1
+            else:
+                n_fail += 1
+           
+            thresh = beta.ppf(1 - self.confidence, n_success + 1, n_fail + 1)
+            if thresh > max_thresh:
+                max_thresh = thresh
+        
+        return max_thresh
+
+    def _sim_prob(self, k, s_n):
+        total_success = 0
+        for _ in range(self.n_particles):
+            samp_eps = self.eps_prior(k)
+            prob = np.prod(1 / (1 + np.exp(-samp_eps)))
+            if prob > self.target_threshold / s_n:
+                total_success += 1
+
+        return total_success / self.n_particles
+
+    def reset(self):
+        self.student_traj = []
+            
 
 # <codecell>
 def run_incremental_vanilla(eps=0, goal_length=10, max_steps=1000, student_lr=0.005):
@@ -112,13 +166,13 @@ def run_incremental_vanilla(eps=0, goal_length=10, max_steps=1000, student_lr=0.
     return traj
 
 
-def run_incremental_unc(eps=0, certainty=0.75, goal_length=10, max_steps=1000, student_lr=0.005):
-    teacher = TeacherUncertainIncremental(certainty=certainty)
+def run_incremental_unc(eps=0, confidence=0.95, goal_length=10, max_steps=1000, student_lr=0.005):
+    teacher = TeacherUncertainIncremental(confidence=confidence)
     env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, student_params={'lr': student_lr})
     traj = [env.N]
     env.reset()
 
-    obs = (1, env._get_score(1, train=False))
+    obs = (1, env._get_score(1, train=False))  # TODO: should be []?
     for _ in range(max_steps):
         action = teacher.next_action(obs)
         obs, _, is_done, _ = env.step(action)
@@ -130,28 +184,55 @@ def run_incremental_unc(eps=0, certainty=0.75, goal_length=10, max_steps=1000, s
     return traj
 
 
-# TODO: make more formal plots
-# traj_unc = run_incremental_unc(certainty=0.95)
-# traj_van = run_incremental_vanilla()
+def run_hasty_unc(tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 0.1), student_eps=0, student_lr=0.005):
+    eps = student_eps
+    eps_prior = lambda k: np.random.normal(*eps_prior_params, size=k)
 
-# plt.plot(traj_unc)
-# plt.plot(traj_van)
+    teacher = TeacherUncertainHasty(target_threshold=tau, eps_prior=eps_prior)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, student_params={'lr': student_lr})
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in tqdm(range(max_steps)):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj
+
+
+traj_unc = run_incremental_unc()
+traj_hasty_unc = run_hasty_unc()
+traj_van = run_incremental_vanilla()
+
+# TODO: comprehensive plots <-- STOPPED HERE
+
+# <codecell>
+
+plt.plot(traj_unc)
+plt.plot(traj_van)
+plt.plot(traj_hasty_unc)
+
 
 # <codecell>
 n_iters = 10
-# certainty = 0.95
+# confidence = 0.95
 max_steps = 5000
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Uncertain (lr=0.1)', run_incremental_unc, {'certainty': 0.95, 'student_lr': 0.1}, []),
+    Case('Uncertain (lr=0.1)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.1}, []),
     Case('Vanilla (lr=0.1)', run_incremental_vanilla, {'student_lr': 0.1}, []),
-    Case('Uncertain (lr=0.02)', run_incremental_unc, {'certainty': 0.95, 'student_lr': 0.02}, []),
+    Case('Uncertain (lr=0.02)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.02}, []),
     Case('Vanilla (lr=0.02)', run_incremental_vanilla, {'student_lr': 0.02}, []),
-    Case('Uncertain (lr=0.005)', run_incremental_unc, {'certainty': 0.95, 'student_lr': 0.005}, []),
+    Case('Uncertain (lr=0.005)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.005}, []),
     Case('Vanilla (lr=0.005)', run_incremental_vanilla, {'student_lr': 0.005}, []),
-    Case('Uncertain (lr=0.001)', run_incremental_unc, {'certainty': 0.95, 'student_lr': 0.001}, []),
+    Case('Uncertain (lr=0.001)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.001}, []),
     Case('Vanilla (lr=0.001))', run_incremental_vanilla, {'student_lr': 0.001}, []),
 ]
 
@@ -180,7 +261,7 @@ all_names = [case.name for case in cases]
 axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
 axs[1].set_ylabel('Iterations')
 
-# fig.suptitle(f'Certainty = {certainty}')
+# fig.suptitle(f'confidence = {confidence}')
 fig.suptitle('Uncertain Teacher')
 fig.tight_layout()
 
@@ -211,11 +292,11 @@ plt.ylabel('Relative difference')
 plt.savefig('../fig/diff.png')
 
 # <codecell> SCRATCH WORK vvv
-def _get_min_k(p_eps, certainty=0.95):
-    raw_k = np.log(1 - certainty) / (-p_eps) - 1
-    return int(np.floor(raw_k))
+def _get_min_m(p_eps, confidence=0.95):
+    raw_m = np.log(1 - confidence) / (-p_eps) - 1
+    return int(np.floor(raw_m))
 
-_get_min_k(-np.log(0.95), certainty=0.85)
+_get_min_m(-np.log(0.95), confidence=0.85)
 
 # %%
 def get_prob_good(transcript):
