@@ -6,7 +6,7 @@ Experimenting with unconfidence and the teacher
 from collections import namedtuple
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import beta
+from scipy.stats import beta, linregress
 
 import sys
 sys.path.append('../')
@@ -64,10 +64,7 @@ class TeacherUncertainIncremental(Agent):
         _, trans = state
         self.student_traj.extend(trans)
 
-        for k in range(self.min_m, self.max_m + 1):
-            if k >= len(self.student_traj):
-                return 0
-
+        for k in range(self.min_m, 1 + min(self.max_m, len(self.student_traj))):
             prob_good = self._get_prob_good(self.student_traj[-k:])
             if prob_good >= self.confidence:
                 return 1
@@ -79,12 +76,6 @@ class TeacherUncertainIncremental(Agent):
         total = len(transcript)
         prob_bad = beta.cdf(self.success_prob, a=success+1, b=total-success+1)
         return 1 - prob_bad
-    
-    def update(self, old_state, action, reward, next_state, is_done):
-        pass
-
-    def learn(self, *args, **kwargs):
-        raise NotImplementedError('TeacherHastyIncremental does not implement method `learn`')
     
     def reset(self):
         self.student_traj = []
@@ -108,10 +99,9 @@ class TeacherUncertainHasty(Agent):
         for k in range(1, self.max_k):
             conf = self._sim_prob(k, max_thresh)
             if conf < self.confidence:
-                k -= 1
                 break
         
-        return k
+        return k - 1
     
     def _get_max_thresh(self):
         max_thresh = 1e-8
@@ -119,10 +109,8 @@ class TeacherUncertainHasty(Agent):
         n_fail = 0
 
         for result in self.student_traj[-self.max_m::][::-1]:
-            if result == 1:
-                n_success += 1
-            else:
-                n_fail += 1
+            n_success += result
+            n_fail += not result
            
             thresh = beta.ppf(1 - self.confidence, n_success + 1, n_fail + 1)
             if thresh > max_thresh:
@@ -139,6 +127,49 @@ class TeacherUncertainHasty(Agent):
                 total_success += 1
 
         return total_success / self.n_particles
+
+    def reset(self):
+        self.student_traj = []
+
+
+class TeacherUncertainAdaptive(TeacherUncertainHasty):
+    def __init__(self, p_eps=0.05, max_m_factor=3, **kwargs):
+        super().__init__(**kwargs)
+        self.p_eps = p_eps
+        self.success_prob = np.exp(-p_eps)
+
+        raw_min_m = np.log(1 - self.confidence) / (-p_eps) - 1
+        self.min_m = int(np.floor(raw_min_m))
+        self.max_m = int(self.min_m * max_m_factor)
+
+    def next_action(self, state):
+        _, trans = state
+        self.student_traj.extend(trans)
+
+        for m in range(self.min_m, 1 + min(self.max_m, len(self.student_traj))):
+            prob_good = self._get_prob_good(self.student_traj[-m:])
+            if prob_good >= self.confidence:
+                jump = self.compute_jump()
+                if jump == 0:
+                    print('warn: jump=0, clipping to 1')
+                    jump = 1
+                return jump
+
+        return 0
+    
+    def _get_prob_good(self, transcript):
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(self.success_prob, a=success+1, b=total-success+1)
+        return 1 - prob_bad
+    
+    def compute_jump(self):
+        for k in range(1, self.max_k):
+            conf = self._sim_prob(k, np.exp(-self.p_eps))
+            if conf < self.confidence:
+                break
+        
+        return k - 1
 
     def reset(self):
         self.student_traj = []
@@ -172,7 +203,7 @@ def run_incremental_unc(eps=0, confidence=0.95, goal_length=10, max_steps=1000, 
     traj = [env.N]
     env.reset()
 
-    obs = (1, env._get_score(1, train=False))  # TODO: should be []?
+    obs = (1, [])
     for _ in range(max_steps):
         action = teacher.next_action(obs)
         obs, _, is_done, _ = env.step(action)
@@ -184,11 +215,30 @@ def run_incremental_unc(eps=0, confidence=0.95, goal_length=10, max_steps=1000, 
     return traj
 
 
-def run_hasty_unc(tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 0.1), student_eps=0, student_lr=0.005):
-    eps = student_eps
+def run_hasty_unc(tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 0.1), eps=0, student_lr=0.005):
     eps_prior = lambda k: np.random.normal(*eps_prior_params, size=k)
 
     teacher = TeacherUncertainHasty(target_threshold=tau, eps_prior=eps_prior)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, student_params={'lr': student_lr})
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in tqdm(range(max_steps)):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+
+    return traj
+
+    
+def run_adp_unc(p_eps=0.05, tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 0.1), eps=0, student_lr=0.005):
+    eps_prior = lambda k: np.random.normal(*eps_prior_params, size=k)
+
+    teacher = TeacherUncertainAdaptive(p_eps=p_eps, target_threshold=tau, eps_prior=eps_prior)
     env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, student_params={'lr': student_lr})
     traj = [env.N]
     env.reset()
@@ -205,35 +255,96 @@ def run_hasty_unc(tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 
     return traj
 
 
-traj_unc = run_incremental_unc()
-traj_hasty_unc = run_hasty_unc()
-traj_van = run_incremental_vanilla()
+def sig(x):
+    return 1 / (1 + np.exp(-x))
 
-# TODO: comprehensive plots <-- STOPPED HERE
+# traj_unc = run_incremental_unc()
+# traj_hasty_unc = run_hasty_unc()
+# traj_adp_unc = run_adp_unc()
+# # traj_van = run_incremental_vanilla()
 
-# <codecell>
+# plt.plot(traj_unc)
+# # plt.plot(traj_van)
+# plt.plot(traj_hasty_unc)
+# plt.plot(traj_adp_unc)
 
-plt.plot(traj_unc)
-plt.plot(traj_van)
-plt.plot(traj_hasty_unc)
+# <codecell>  OBSERVE SCALING CURVES
+ns = 3 * np.arange(1, 11)
+n_iters = 5
+lr = 0.01
 
-
-# <codecell>
-n_iters = 10
-# confidence = 0.95
 max_steps = 5000
+eps = 10
+eps_prior_params = (eps, 0.1)
+tau = 0.9
+
+Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+
+cases = defaultdict(list)
+for n in ns:
+    cases['Uncertain'].append(Case(str(n), run_incremental_unc, {'goal_length': n, 'eps': eps, 'student_lr': lr}, []))
+    cases['Hasty'].append(Case(str(n), run_hasty_unc, {'goal_length': n, 'eps': eps, 'tau': tau, 'student_lr': lr, 'eps_prior_params': eps_prior_params}, []))
+    cases['Adaptive'].append(Case(str(n), run_adp_unc, {'goal_length': n, 'eps': eps, 'tau': tau, 'student_lr': lr, 'eps_prior_params': eps_prior_params}, []))
+
+for i in range(n_iters):
+    print('Iter:', i)
+    for name, cs in cases.items():
+        print('Type:', name)
+        for case in tqdm(cs):
+            case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
+
+
+# <codecell>
+width = 0.5
+offs = [-1, 0, 1]
+
+all_xs = []
+all_ys = []
+
+for off, (name, cs) in zip(offs, cases.items()):
+    run_lens = np.array([[len(run) for run in case.runs] for case in cs])
+    mean = np.mean(run_lens, axis=1)
+    std = np.std(run_lens, axis=1) / np.sqrt(n_iters)
+
+    # plt.bar(ns + off * width, mean, width, yerr=2*std, label=name)
+    plt.errorbar(ns, mean, fmt='o', yerr=2*std, label=name, alpha=0.7)
+    all_xs.append(ns[:])
+    all_ys.append(mean)
+
+all_xs = np.concatenate(all_xs, axis=0)
+all_ys = np.concatenate(all_ys, axis=0)
+
+slope, intercept, r, _, _ = linregress(np.log(all_xs), np.log(all_ys))
+
+plt.plot(ns, np.exp(slope * np.log(ns) + intercept), alpha=0.5)
+
+plt.yscale('log')
+plt.xscale('log')
+plt.xticks(ns)
+plt.legend()
+
+plt.gcf().tight_layout()
+plt.ylabel('Log Iterations')
+plt.xlabel('N')
+plt.savefig('../fig/scale_log_log.png')
+
+
+# <codecell>
+n_iters = 5
+lr = 0.2
+
+max_steps = 2500
+eps = 1
+eps_prior_params = (eps, 0.1)
+tau = 0.65
+N = 20
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Uncertain (lr=0.1)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.1}, []),
-    Case('Vanilla (lr=0.1)', run_incremental_vanilla, {'student_lr': 0.1}, []),
-    Case('Uncertain (lr=0.02)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.02}, []),
-    Case('Vanilla (lr=0.02)', run_incremental_vanilla, {'student_lr': 0.02}, []),
-    Case('Uncertain (lr=0.005)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.005}, []),
-    Case('Vanilla (lr=0.005)', run_incremental_vanilla, {'student_lr': 0.005}, []),
-    Case('Uncertain (lr=0.001)', run_incremental_unc, {'confidence': 0.95, 'student_lr': 0.001}, []),
-    Case('Vanilla (lr=0.001))', run_incremental_vanilla, {'student_lr': 0.001}, []),
+    Case('Uncertain', run_incremental_unc, {'eps': eps, 'student_lr': lr, 'goal_length': N}, []),
+    Case('Hasty', run_hasty_unc, {'eps': eps, 'tau': tau, 'student_lr': lr, 'eps_prior_params':eps_prior_params, 'goal_length': N}, []),
+    # Case('Adaptive', run_adp_unc, {'eps': eps, 'tau': tau, 'student_lr': lr, 'eps_prior_params':eps_prior_params, 'goal_length': N}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
@@ -246,12 +357,13 @@ fig, axs = plt.subplots(1, 2, figsize=(12, 4))
 for i, case in enumerate(cases):
     label = {'label': case.name}
     for run in case.runs:
-        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        axs[0].plot(run, color=f'C{i}', alpha=0.4, **label)
         label = {}
 
 axs[0].legend()
 axs[0].set_xlabel('Iteration')
 axs[0].set_ylabel('N')
+# axs[0].set_xlim((0, 300))
 
 all_lens = [[len(run) for run in case.runs] for case in cases]
 all_means = [np.mean(lens) for lens in all_lens]
@@ -261,11 +373,11 @@ all_names = [case.name for case in cases]
 axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
 axs[1].set_ylabel('Iterations')
 
-# fig.suptitle(f'confidence = {confidence}')
-fig.suptitle('Uncertain Teacher')
+# fig.suptitle(f'eps = {eps}   tau = {tau}')
 fig.tight_layout()
 
-# plt.savefig('../fig/uncertain_teacher.png')
+plt.savefig(f'../fig/eps_{eps}_tau_{tau}.png')
+
 
 # <codecell>
 ## SPECIAL PLOT COMPARING VANILLA AND UNCERTAIN
@@ -291,23 +403,38 @@ plt.xlabel('Learning rate')
 plt.ylabel('Relative difference')
 plt.savefig('../fig/diff.png')
 
+
+
+
+
 # <codecell> SCRATCH WORK vvv
-def _get_min_m(p_eps, confidence=0.95):
-    raw_m = np.log(1 - confidence) / (-p_eps) - 1
-    return int(np.floor(raw_m))
+def run_hasty_unc_adp(tau=0.4, goal_length=10, max_steps=1000, eps_prior_params=(0, 0.1), eps=0, student_lr=0.005):
+    eps_prior = lambda k: np.random.normal(*eps_prior_params, size=k)
 
-_get_min_m(-np.log(0.95), confidence=0.85)
+    teacher = TeacherUncertainHasty(target_threshold=tau, eps_prior=eps_prior)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, student_params={'lr': student_lr})
+    traj = [env.N]
+    env.reset()
 
+    obs = (1, [])
+    all_probs = []
+    for _ in tqdm(range(max_steps)):
+        action = teacher.next_action(obs)
+        if action > 0 and env.N < goal_length:
+            log_prob = env.student.score(env.N + action)
+            all_probs.append(np.exp(log_prob))
+
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj, teacher, env, all_probs
+
+
+traj, all_probs = run_hasty_unc()
 # %%
-def get_prob_good(transcript):
-    success = np.sum(transcript)
-    total = len(transcript)
+traj
 
-    print(success)
-    print(total)
-    print(success / total)
-    prob_bad = beta.cdf(0.8, a=success+1, b=total-success+1)
-    return 1 - prob_bad
-
-get_prob_good([1,0,0,1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 # %%
