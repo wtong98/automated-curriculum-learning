@@ -158,7 +158,12 @@ class Student(Agent):
         self.gamma = gamma
 
         # only track Q-values for action = 1, maps state --> value
-        self.q_e = defaultdict(int) if type(q_e) == type(None) else q_e
+        if type(q_e) == int or type(q_e) == float:
+            self.q_e = defaultdict(lambda: q_e)
+        elif type(q_e) != type(None):
+            self.q_e = q_e
+        else:
+            self.q_e = defaultdict(int)
         self.q_r = defaultdict(int)
     
     # softmax policy
