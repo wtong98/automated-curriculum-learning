@@ -15,7 +15,6 @@ import gym
 from gym import spaces
 
 from trail_map import *
-from curriculum import *
 
 
 class TrailEnv(gym.Env):

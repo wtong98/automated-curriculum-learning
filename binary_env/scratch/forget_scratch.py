@@ -13,11 +13,11 @@ sys.path.append('../')
 from env import *
 
 # <codecell>
-def run_sim(N, eps, max_iters=1000, big_reward=1e4):
-    student = Student(lr=1, q_e=eps)
-    env = BinaryEnv(N, reward=big_reward)
+def run_sim(N, eps, max_iters=1000, lr=1, reward=1e4):
+    student = Student(lr=lr, q_e=eps)
+    env = BinaryEnv(N, reward=reward)
     student.learn(env)
-    env = BinaryEnv(N + 1, reward=big_reward)
+    env = BinaryEnv(N + 1, reward=reward)
 
     total = 0
     for _ in range(max_iters):
@@ -31,20 +31,32 @@ def run_sim(N, eps, max_iters=1000, big_reward=1e4):
             state = new_state
 
         total += 1
-        if 0 not in student.q_r.values():
+        # if 0 not in student.q_r.values():
+        #     break
+        if student.score(N+1) > -0.05:
             break
 
     return total
-# %%
-n_iters = 10000
-avg = 0
-for _ in tqdm(range(n_iters)):
-    avg += run_sim(5, 1) / n_iters
 
-print(avg)
+def pred_iters(N, eps):
+    return 1 / sig(eps) ** (N+1) + N
 
-# %%
 def sig(x):
     return 1 / (1 + np.exp(-x))
+# %%
+n_iters = 1000
+eps = 0
+N = 5
+
+samps = []
+for _ in tqdm(range(n_iters)):
+    samps.append(run_sim(N, eps, lr=0.1, reward=10))
+    # samps.append(run_sim(N, eps, lr=1, reward=1000))
+
+# %%
+plt.hist(samps, bins=30)
+plt.axvline(np.mean(samps), color='black', label='samp mean')
+plt.axvline(pred_iters(N, eps), color='red', linestyle='dashed', alpha=0.8, label='pred mean')
+plt.legend()
 
 # %%

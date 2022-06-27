@@ -9,7 +9,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from stable_baselines3 import PPO
 from tqdm import tqdm
 
-from trail import TrailEnv
+from env import TrailEnv
 from trail_map import *
 
 
@@ -24,7 +24,7 @@ trail_args = {
     'radius': 100, 
     'diff_rate': 0.01, 
     'reward_dist': 3,
-    # 'breaks':[(0.6, 0.8)]
+    'breaks':[(0.5, 0.6)]
     # 'breaks':[(0.5, 0.99)]
 }
 
@@ -37,7 +37,7 @@ trail_args = {
 
 trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
-model = PPO.load('trail_model', device='cpu')
+model = PPO.load('trained/meander_360_feb22.zip', device='cpu')
 # model = PPO("CnnPolicy", env, verbose=1,
 #             n_steps=128,
 #             batch_size=256,
@@ -68,7 +68,7 @@ for _ in range(100):
 
 env.map.plot(ax=plt.gca())
 plt.plot(*zip(*env.agent.position_history), linewidth=2, color='black')
-plt.savefig('out.png')
+# plt.savefig('fig/out.png')
 
 # print(env.agent.odor_history)
 
@@ -106,32 +106,33 @@ for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
 
 fig.suptitle('Sample of agent runs')
 fig.tight_layout()
-plt.savefig('out.png')
+# plt.savefig('fig/sample_runs_with_breaks.png')
 
 # <codecell>
 # FUNC ANIMATION
 
-trail_map = trail_class(**trail_args)
+trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
-# model = PPO.load('trained/epoch_2/width10_break_jan29.zip', device='cpu')
 
 obs = env.reset()
 frames = [env.agent.position_history[:]]
 for _ in range(100):
     action, _ = model.predict(obs, deterministic=False)
     obs, _, is_done, _ = env.step(action)
-    frames.append(env.agent.position_history[:])
+    # frames.append(env.agent.position_history[:])
+    frames.append(obs)
 
     if is_done:
         print('reach end')
         break
 
 def plot_frame(frame):
-    env.map.plot(ax=plt.gca())
-    plt.plot(*zip(*frame), linewidth=2, color='black')
+    # env.map.plot(ax=plt.gca())
+    # plt.plot(*zip(*frame), linewidth=2, color='black')
+    plt.imshow(frame)
 
-ani = FuncAnimation(plt.gcf(), plot_frame, frames=frames)
-ani.save('out.gif')
+ani = FuncAnimation(plt.gcf(), plot_frame, frames=frames, interval=100)
+ani.save('fig/agent_movie_obs.gif')
 
 # %%
 # DECISION VISUALS

@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 import torch
 from tqdm import tqdm
 
-from trail import TrailEnv
+from env import TrailEnv
 from trail_map import MeanderTrail
 from curriculum import *
 
@@ -45,7 +45,7 @@ def run_session(student, teacher, eval_env):
 
 
 if __name__ == '__main__':
-    n_runs = 5
+    n_runs = 1
     len_sched = [10, 20, 30, 40, 50, 60]
 
     def env_fn(): return TrailEnv(None)
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     for _ in tqdm(range(n_runs)):
         teacher_inc = IncrementalTeacher(len_sched=len_sched)
-        teacher_rand = RandomTeacher(TrailEnv, len_sched=len_sched)
+        teacher_rand = RandomTeacher(len_sched=len_sched)
 
         model_inc = make_model()
         model_rand = make_model()
@@ -72,26 +72,26 @@ if __name__ == '__main__':
     lens_rand = [len(traj) for traj in all_trajs_rand]
 
     mean_inc = np.mean(lens_inc)
-    std_inc = np.std(lens_inc)
+    std_inc = np.std(lens_inc) / np.sqrt(n_runs)
 
     mean_rand = np.mean(lens_rand)
-    std_rand = np.std(lens_rand)
+    std_rand = np.std(lens_rand) / np.sqrt(n_runs)
 
     plt.bar([0, 1], [mean_inc, mean_rand], yerr=[2 * std_inc, 2 * std_rand], tick_label=['Incremental', 'Random'])
     plt.title('Teacher comparison on trail tracking task')
     plt.savefig('fig/tt_method_comparison.png')
     plt.clf()
-
+# <codecell>
     # plot trajectories
-    fig, axs = plt.subplots(2, 1, figsize=(6, 6))
+    fig, axs = plt.subplots(2, 1, figsize=(12, 6))
     max_x = len(max(all_trajs_rand, key=lambda x: len(x)))
 
     for ax, trajs, name in zip(axs, (all_trajs_inc, all_trajs_rand), ('Incremental', 'Random')):
         ax_score = ax.twinx()
         for t in trajs:
             ns, score = zip(*t)
-            ax.plot(ns, color='C0', alpha=0.7)
-            ax_score.plot(score, color='C1', alpha=0.7)
+            ax.plot(ns, 'o--', color='C0', alpha=0.6)
+            ax_score.plot(score, 'o--', color='C1', alpha=0.6)
 
         ax.set_xlabel('Lesson')
         ax.set_xlim(0, max_x)

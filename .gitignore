@@ -3,3 +3,4 @@ fig/
 *.pkl
 *.png
 log/
+trained/
