@@ -3,7 +3,7 @@ Simple binary environments for experimenting with teacher-student interactions
 
 author: William Tong (wtong@g.harvard.edu)
 """
-
+# <codecell>
 import copy
 
 from collections import defaultdict
@@ -53,7 +53,8 @@ class CurriculumEnv(gym.Env):
                  teacher_reward=1,
                  student_reward=1,
                  student_qe_dist=None,
-                 student_params=None):
+                 student_params=None,
+                 anarchy_mode=False):
         super().__init__()
 
         self.student = None
@@ -71,12 +72,16 @@ class CurriculumEnv(gym.Env):
 
         self.action_space = gym.spaces.Discrete(3)
         self.student_params = student_params if student_params != None else {}
+        self.anarchy_mode = anarchy_mode
     
     def step(self, action):
-        d_length = action - 1
-        self.N = np.clip(self.N + d_length, 1, self.goal_length)
-        prob = np.exp(self._get_score(self.N))
+        if self.anarchy_mode:
+            self.N = action
+        else:
+            d_length = action - 1
+            self.N = np.clip(self.N + d_length, 1, self.goal_length)
 
+        prob = np.exp(self._get_score(self.N))
         reward = 0
         is_done = False
 
@@ -89,17 +94,7 @@ class CurriculumEnv(gym.Env):
         return (self.N, log_prob), reward, is_done, {}
     
     def reset(self):
-        if self.student_qe_dist == None:
-            self.student = Student(**self.student_params)
-        else:
-            if type(self.student_qe_dist) == int or type(self.student_qe_dist) == float:
-                qe_val = self.student_qe_dist
-            else:
-                qe_val = self.student_qe_dist()
-
-            q_e = defaultdict(lambda: qe_val)
-            self.student = Student(q_e=q_e, **self.student_params)
-
+        self.student = Student(q_e=self.student_qe_dist, **self.student_params)
         student_score = self._get_score(self.goal_length, train=False)
         self.N  = 1
         return (self.goal_length, student_score)
@@ -174,7 +169,8 @@ class Student(Agent):
 
     def next_action(self, state) -> int:
         _, prob = self.policy(state)
-        return np.random.binomial(n=1, p=prob)
+        a = np.random.binomial(n=1, p=prob)
+        return a 
     
     def update(self, old_state, _, reward, next_state, is_done):
         if is_done:
@@ -230,10 +226,7 @@ class Teacher(Agent):
         try:
             return np.random.choice([0, 1, 2], p=probs)
         except ValueError as e:
-            print('probs', probs)
-            print('state', state)
             qs = np.array([self.q[(state, a)] for a in [0, 1, 2]])
-            print('qs:', qs)
             raise e
 
     def update(self, old_state, action, reward, next_state, is_done):
@@ -509,3 +502,224 @@ class TeacherPomcpAgent(Agent):
 
     def learn(self, *args, **kwargs):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
+    
+
+class TeacherPerfectKnowledge(Agent):
+    def __init__(self, goal_length, T, p_eps=0.05, 
+                       student_qe=0, student_lr=0.01, student_reward=10, 
+                       n_iters=500, gamma=0.9, eps=1e-2, explore_factor=1) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.T = T
+        self.p_eps = p_eps
+        self.student_qe = student_qe
+        self.student_lr = student_lr
+        self.student_reward = student_reward
+
+        self.n_iters = n_iters
+        self.gamma = gamma
+        self.eps = eps
+        self.explore_factor = explore_factor
+
+        self.actions = np.arange(goal_length) + 1
+        self.history = ()
+        self.tree = {}
+    
+    def reset(self):
+        self.history = ()
+        self.tree = {}
+
+        self.qrs_means = []
+        self.qrs_stds = []
+        self.num_particles = []
+    
+
+    def next_action(self, prev_action=None, qr=None):
+        if prev_action != None and type(qr) != type(None):
+            qr = self._round(qr)
+            self.history += (prev_action, tuple(qr))
+            if self.history not in self.tree:
+                print('warn: rerooting tree')
+                self.tree = {}
+                self.history = self.history[-2:]
+        else:
+            self.history += (1, tuple(np.zeros(self.goal_length)))
+
+        a = self._search()
+        return a
+    
+    def _round(self, val):
+        return np.round(val, decimals=1)
+    
+    # def _update_qr(self, n, qr, fail_idx):
+    #     if fail_idx == n + 1:
+    #         payoff = self.student_reward
+    #     else:
+    #         payoff = 0
+        
+    #     rpe = np.append(qr[1:fail_idx+1], payoff) - qr[:fail_idx+1]
+    #     qr[:fail_idx+1] += self.student_lr * (rpe - qr[:fail_idx+1])
+    #     return qr
+    
+    # def _sample_run(self, n, qr):
+    #     qs = self.student_qe + qr
+    #     qs = qs[:n+1]
+
+    #     log_trans_probs = -np.log(1 + np.exp(-qs))
+    #     success_prob = np.exp(np.cumsum(log_trans_probs))
+    #     indep_prob = success_prob * (1 - np.exp(log_trans_probs))
+    #     indep_prob = np.append(indep_prob, 1-np.sum(indep_prob))  # add total prob of success
+    #     return np.argmax(np.random.multinomial(1, indep_prob))
+
+    def _sample_transition(self, state, action):
+        qr = np.array(state)
+        n = action
+
+        # for _ in range(self.T):
+        #     fail_idx = self._sample_run(n, qr)
+        #     qr = self._update_qr(n, qr, fail_idx)
+        student = Student(lr=self.student_lr, q_e=self.eps)
+        student.q_r = qr
+        student.learn(BinaryEnv(n, reward=self.student_reward), max_iters=self.T)
+        qr = student.q_r
+
+        is_done = False
+        reward = 0
+        qs = self.student_qe + qr
+        log_trans_probs = -np.log(1 + np.exp(-qs))
+        log_success_prob = np.sum(log_trans_probs)
+        if log_success_prob > -self.p_eps and n == self.goal_length:
+            is_done = True
+            reward = 10  # TODO: parameterize
+
+        qr = tuple(self._round(qr))
+        return qr, reward, is_done
+
+    def _sample_rollout_policy(self, history):
+        return np.random.choice(self.actions)   # TODO: use something better?
+    
+    def _init_node(self):
+        return {'v': 0, 'n': 0}
+    
+    def _search(self):
+        for _ in range(self.n_iters):
+            self._simulate(self.history, 0)
+        
+        vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
+        print('VALS', vals)
+        return np.argmax(vals) + 1
+    
+    def _simulate(self, history, depth):
+        reward_stack = []
+        node_stack = []
+        n_visited_stack = []
+
+        while self.gamma ** depth > self.eps:
+            if history not in self.tree:
+                self.tree[history] = self._init_node()
+                for a in self.actions:
+                    proposal = history + (a,)
+                    self.tree[proposal] = self._init_node()
+                pred_reward = self._rollout(history, depth)
+                reward_stack.append(pred_reward)
+                break
+
+            vals = []
+            for a in self.actions:
+                curr_node = self.tree[history]
+                next_node = self.tree[history + (a,)]
+                if curr_node['n'] > 0 and next_node['n'] > 0:
+                    explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
+                else:
+                    explore = 999  # arbitrarily high
+
+                vals.append(next_node['v'] + explore)
+
+            a = np.argmax(vals) + 1
+            # print('PROPOSED A', a)
+            state = self.history[-1]
+            next_state, reward, is_done = self._sample_transition(state, a)
+            reward_stack.append(reward)
+
+            self.tree[history]['n'] += 1
+            next_node = self.tree[history + (a,)]
+            next_node['n'] += 1
+            node_stack.append(next_node)
+            n_visited_stack.append(next_node['n'])
+
+            history += (a, next_state)
+            # print('NEW HIST', history)
+            state = next_state
+            depth += 1
+
+            if is_done:
+                break
+
+        
+        # backprop rewards
+        for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
+            total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
+            node['v'] += (total_reward - node['v']) / n_visited
+
+
+    def _rollout(self, history, depth):
+        g = 1
+        total_reward = 0
+
+        state = history[-1]
+        while self.gamma ** depth > self.eps:
+            a = self._sample_rollout_policy(history)
+            state, reward, is_done = self._sample_transition(state, a)
+
+            history += (a, state)
+            total_reward += g * reward
+            g *= self.gamma
+            depth += 1
+
+            if is_done:
+                break
+        
+        return total_reward
+    
+    def learn(self, env, is_eval=False,
+             max_iters=1000, 
+             use_tqdm=False, 
+             post_hook=None, done_hook=None):
+        raise NotImplementedError('TeacherPerfectKnowledge does not need to learn - it is cosmically perfect')
+    
+# <codecell>
+# N = 3
+# T = 50
+# lr = 0.01
+# reward = 10
+# eps = 0
+
+
+# teacher = TeacherPerfectKnowledge(goal_length=N, T=T, student_lr=lr, student_reward=reward, student_qe=eps)
+# env = CurriculumEnv(goal_length=N, train_iter=T, student_qe_dist=eps, teacher_reward=10, student_reward=10, student_params={'lr': lr}, anarchy_mode=True)
+# env.reset()
+
+# qr = np.zeros(N)
+# prev_a = None
+# is_done = False
+
+# while not is_done:
+#     a = teacher.next_action(prev_a, qr)
+#     state, reward, is_done, _ = env.step(a)
+
+#     print(f'action: {a}   state: {state}')
+
+#     prev_a = a
+#     qr = np.array([env.student.q_r[i] for i in range(N)])
+
+# print('Great success!')
+
+# student = Student(lr=lr, q_e=eps)
+
+# student.learn(BinaryEnv(N, reward=reward), max_iters=T)
+# state, reward, is_done = teacher._sample_transition(np.zeros(N), N)
+
+# print(state)
+# print(student.q_r)
+
+# %%

@@ -24,7 +24,7 @@ trail_args = {
     'radius': 100, 
     'diff_rate': 0.01, 
     'reward_dist': 3,
-    'breaks':[(0.5, 0.6)]
+    'breaks':[(0.6, 0.75)]
     # 'breaks':[(0.5, 0.99)]
 }
 
