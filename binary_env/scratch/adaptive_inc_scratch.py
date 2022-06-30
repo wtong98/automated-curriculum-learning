@@ -4,7 +4,6 @@ Experimenting with adaptive incremental strategies
 
 # <codecell>
 from collections import namedtuple
-from curses import ALL_MOUSE_EVENTS
 import gym
 import matplotlib.pyplot as plt
 import numpy as np

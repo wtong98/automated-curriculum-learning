@@ -7,6 +7,7 @@ author: William Tong (wtong@g.harvard.edu)
 import copy
 
 from collections import defaultdict
+import numbers
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
@@ -153,7 +154,7 @@ class Student(Agent):
         self.gamma = gamma
 
         # only track Q-values for action = 1, maps state --> value
-        if type(q_e) == int or type(q_e) == float:
+        if isinstance(q_e, numbers.Number):
             self.q_e = defaultdict(lambda: q_e)
         elif type(q_e) != type(None):
             self.q_e = q_e
@@ -578,7 +579,7 @@ class TeacherPerfectKnowledge(Agent):
         # for _ in range(self.T):
         #     fail_idx = self._sample_run(n, qr)
         #     qr = self._update_qr(n, qr, fail_idx)
-        student = Student(lr=self.student_lr, q_e=self.eps)
+        student = Student(lr=self.student_lr, q_e=self.student_qe)
         student.q_r = qr
         student.learn(BinaryEnv(n, reward=self.student_reward), max_iters=self.T)
         qr = student.q_r
