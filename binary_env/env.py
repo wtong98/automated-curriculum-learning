@@ -110,7 +110,7 @@ class Agent:
     def __init__(self) -> None:
         self.iter = 0
 
-    def next_action(state):
+    def next_action(self, state):
         raise NotImplementedError('next_action not implemented in Agent')
 
     def update(old_state, action, reward, next_state, is_done):
@@ -552,33 +552,10 @@ class TeacherPerfectKnowledge(Agent):
     def _round(self, val):
         return np.round(val, decimals=1)
     
-    # def _update_qr(self, n, qr, fail_idx):
-    #     if fail_idx == n + 1:
-    #         payoff = self.student_reward
-    #     else:
-    #         payoff = 0
-        
-    #     rpe = np.append(qr[1:fail_idx+1], payoff) - qr[:fail_idx+1]
-    #     qr[:fail_idx+1] += self.student_lr * (rpe - qr[:fail_idx+1])
-    #     return qr
-    
-    # def _sample_run(self, n, qr):
-    #     qs = self.student_qe + qr
-    #     qs = qs[:n+1]
-
-    #     log_trans_probs = -np.log(1 + np.exp(-qs))
-    #     success_prob = np.exp(np.cumsum(log_trans_probs))
-    #     indep_prob = success_prob * (1 - np.exp(log_trans_probs))
-    #     indep_prob = np.append(indep_prob, 1-np.sum(indep_prob))  # add total prob of success
-    #     return np.argmax(np.random.multinomial(1, indep_prob))
-
     def _sample_transition(self, state, action):
         qr = np.array(state)
         n = action
 
-        # for _ in range(self.T):
-        #     fail_idx = self._sample_run(n, qr)
-        #     qr = self._update_qr(n, qr, fail_idx)
         student = Student(lr=self.student_lr, q_e=self.student_qe)
         student.q_r = qr
         student.learn(BinaryEnv(n, reward=self.student_reward), max_iters=self.T)
@@ -687,6 +664,135 @@ class TeacherPerfectKnowledge(Agent):
              use_tqdm=False, 
              post_hook=None, done_hook=None):
         raise NotImplementedError('TeacherPerfectKnowledge does not need to learn - it is cosmically perfect')
+
+
+class TeacherPerfectKnowledgeDp(Agent):
+    def __init__(self, goal_length=3, train_iters=50, p_eps=0.05, gamma=1, n_bins_per_q=100, n_round_places=1, student_params=None) -> None:
+        super().__init__()
+        self.student_params = student_params or {
+            'lr': 0.1,
+            'reward': 10,
+            'eps': 0
+        }
+
+        self.N = goal_length
+        self.T = train_iters
+        self.p_eps = p_eps
+        self.gamma = gamma
+        self.n_bins_per_q = n_bins_per_q
+        self.n_round_places = n_round_places
+
+        state_axis = np.round(
+            np.linspace(0, self.student_params['reward'], n_bins_per_q), 
+            n_round_places)
+        self.states = self._combo(state_axis, self.N)
+
+        fail_axis = np.arange(1, self.N + 2)
+        self.fails = self._combo(fail_axis, self.T)
+
+        rand_ints = np.random.randint(self.N, size=len(self.states)) + 1
+        self.policy = {s:a for s, a in zip(self.states, rand_ints)}
+        self.value = {s:0 for s in self.states}
+        
+    
+    # TODO: test
+    def _combo(self, axis, dims):
+        states = [(s,) for s in axis]
+        for _ in range(dims - 1):
+            states = [ss + (s,) for ss in states for s in axis]
+
+        return states
+
+    def next_action(self, state):
+        return self.policy(state)
+    
+    def learn(self, max_iters=100, eval_iters=3):
+        for _ in range(max_iters):
+            self._policy_eval(max_iters=eval_iters)
+            is_stable = self._policy_improv()
+
+            if is_stable:
+                break
+    
+    def _policy_eval(self, max_iters=np.inf, eps=1e-2):
+        for _ in range(max_iters):
+            max_change = 0
+
+            for s in self.states:
+                old_val = self.value[s]
+                new_val = self._compute_value(s, self.policy(s))
+                self.value[s] = new_val
+                max_change = max(max_change, np.abs(old_val - new_val))
+            
+            if max_change < eps:
+                break
+
+    def _policy_improv(self):
+        is_stable = True
+        for s in self.states:
+            old_a = self.policy(s)
+            vals = [self._compute_value(s, a) for a in np.arange(self.N) + 1]
+            best_a = np.argmax(vals) + 1
+            self.policy[s] = best_a
+
+            if best_a != old_a:
+                is_stable = False
+        
+        return is_stable
+            
+    
+    def _compute_value(self, state, action):
+        logprobs = self._compute_prob(state, action)
+        val = 0
+        for next_state, logprob in logprobs.items():
+            if -np.sum(next_state) < self.p_eps:
+                update = 10   # TODO: hardcoded
+            else:
+                update = self.gamma * self.value(next_state)
+            val += np.exp(logprob) * update
+        return val
+    
+    def _compute_prob(self, state, action):
+        logprobs = {s:-np.inf for s in self.states}
+
+        for run in self.fails:
+            qr = np.array(state)
+            cum_log_prob = 0
+            for fail_idx in run:
+                cum_log_prob += np.sum(self._logsig(qr[:fail_idx]))
+                qr = self._update_qr(action, qr, fail_idx)
+            
+            qr = tuple(self._disc(qr))
+            logprobs[qr] = np.logaddexp(logprobs[qr], cum_log_prob)
+        
+        return logprobs
+
+
+    # TODO: test
+    def _update_qr(self, n, qr, fail_idx):
+        if fail_idx == n + 1:
+            payoff = self.student_params['reward']
+        else:
+            payoff = 0
+        
+        rpe = np.append(self._sig(qr[1:fail_idx+1]) * qr[1:fail_idx+1], payoff) - qr[:fail_idx+1]
+        qr[:fail_idx+1] += self.student_params['lr'] * rpe
+        return qr
+    
+    def _sig(self, val):
+        return 1 / (1 + np.exp(-val))
+    
+    def _logsig(self, val):
+        return -np.log(1 + np.exp(-val))
+    
+    # TODO: test
+    def _disc(self, qr):
+        bin_idx = np.round(qr / self.student_params['reward'] * self.n_bins_per_q)
+        return np.round(bin_idx / self.n_bins_per_q * self.student_params['reward'], self.n_round_places)
+
+    def update(old_state, action, reward, next_state, is_done):
+        raise NotImplementedError('Use learn() to train agent directly')
+
     
 # <codecell>
 # N = 3
