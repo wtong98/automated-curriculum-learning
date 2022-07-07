@@ -669,11 +669,15 @@ class TeacherPerfectKnowledge(Agent):
 class TeacherPerfectKnowledgeDp(Agent):
     def __init__(self, goal_length=3, train_iters=50, p_eps=0.05, gamma=1, n_bins_per_q=100, n_round_places=1, student_params=None) -> None:
         super().__init__()
-        self.student_params = student_params or {
+        self.student_params = {
             'lr': 0.1,
             'reward': 10,
             'eps': 0
         }
+
+        if student_params != None:
+            for key, val in student_params.items():
+                self.student_params[key] = val
 
         self.N = goal_length
         self.T = train_iters
@@ -682,12 +686,12 @@ class TeacherPerfectKnowledgeDp(Agent):
         self.n_bins_per_q = n_bins_per_q
         self.n_round_places = n_round_places
 
-        state_axis = np.round(
+        self.state_axis = np.round(
             np.linspace(0, self.student_params['reward'], n_bins_per_q), 
             n_round_places)
-        self.states = self._combo(state_axis, self.N)
+        self.states = self._combo(self.state_axis, self.N)
 
-        fail_axis = np.arange(1, self.N + 2)
+        fail_axis = np.arange(self.N + 1)
         self.fails = self._combo(fail_axis, self.T)
 
         rand_ints = np.random.randint(self.N, size=len(self.states)) + 1
@@ -695,7 +699,6 @@ class TeacherPerfectKnowledgeDp(Agent):
         self.value = {s:0 for s in self.states}
         
     
-    # TODO: test
     def _combo(self, axis, dims):
         states = [(s,) for s in axis]
         for _ in range(dims - 1):
@@ -760,6 +763,9 @@ class TeacherPerfectKnowledgeDp(Agent):
             cum_log_prob = 0
             for fail_idx in run:
                 cum_log_prob += np.sum(self._logsig(qr[:fail_idx]))
+                if fail_idx < len(self.N):
+                    cum_log_prob += np.log(1 - self._sig(qr[fail_idx]))
+
                 qr = self._update_qr(action, qr, fail_idx)
             
             qr = tuple(self._disc(qr))
@@ -768,9 +774,8 @@ class TeacherPerfectKnowledgeDp(Agent):
         return logprobs
 
 
-    # TODO: test
     def _update_qr(self, n, qr, fail_idx):
-        if fail_idx == n + 1:
+        if fail_idx == n:
             payoff = self.student_params['reward']
         else:
             payoff = 0
@@ -785,48 +790,43 @@ class TeacherPerfectKnowledgeDp(Agent):
     def _logsig(self, val):
         return -np.log(1 + np.exp(-val))
     
-    # TODO: test
     def _disc(self, qr):
-        bin_idx = np.round(qr / self.student_params['reward'] * self.n_bins_per_q)
-        return np.round(bin_idx / self.n_bins_per_q * self.student_params['reward'], self.n_round_places)
+        bin_idx = np.round(qr / self.student_params['reward'] * (self.n_bins_per_q - 1)).astype('int')
+        return self.state_axis[bin_idx]
 
     def update(old_state, action, reward, next_state, is_done):
         raise NotImplementedError('Use learn() to train agent directly')
 
     
 # <codecell>
-# N = 3
-# T = 50
-# lr = 0.01
-# reward = 10
-# eps = 0
+# TODO: test policy iteration stuff
+eps = 0
+
+teacher = TeacherPerfectKnowledgeDp(goal_length=3, train_iters=3, n_bins_per_q=100, student_params={
+    'lr': 0.1,
+    'eps': eps
+})
+
+student = Student(lr=0.1, q_e=eps)
+env = BinaryEnv(3, reward=10)
+qr = np.zeros(3)
+
+for _ in range(100):
+    is_done = False
+    state = env.reset()
+    while not is_done:
+        action = student.next_action(state)
+        next_state, reward, is_done, _ = env.step(action)
+        student.update(state, action, reward, next_state, is_done)
+        state = next_state
+    
+    fail_idx = env.loc
+    qr = teacher._update_qr(3, qr, fail_idx)
+    print('--')
+    print('Fail:', fail_idx)
+    print('Estimd:', qr)
+    print('Actual:', list(student.q_r.values()))
 
 
-# teacher = TeacherPerfectKnowledge(goal_length=N, T=T, student_lr=lr, student_reward=reward, student_qe=eps)
-# env = CurriculumEnv(goal_length=N, train_iter=T, student_qe_dist=eps, teacher_reward=10, student_reward=10, student_params={'lr': lr}, anarchy_mode=True)
-# env.reset()
-
-# qr = np.zeros(N)
-# prev_a = None
-# is_done = False
-
-# while not is_done:
-#     a = teacher.next_action(prev_a, qr)
-#     state, reward, is_done, _ = env.step(a)
-
-#     print(f'action: {a}   state: {state}')
-
-#     prev_a = a
-#     qr = np.array([env.student.q_r[i] for i in range(N)])
-
-# print('Great success!')
-
-# student = Student(lr=lr, q_e=eps)
-
-# student.learn(BinaryEnv(N, reward=reward), max_iters=T)
-# state, reward, is_done = teacher._sample_transition(np.zeros(N), N)
-
-# print(state)
-# print(student.q_r)
 
 # %%
