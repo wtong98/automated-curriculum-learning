@@ -11,16 +11,16 @@ import sys
 sys.path.append('../')
 from env import *
 
-# <codecell>
-teacher_cache = None
+
+teacher_cache = defaultdict(lambda: None)
 def run_dp(eps=0, goal_length=3, bins=100, T=3, lr=0.1, max_steps=500):
     global teacher_cache
-    if teacher_cache == None:
+    if teacher_cache[eps] == None:
         teacher = TeacherPerfectKnowledgeDp(goal_length=goal_length, train_iters=T, n_bins_per_q=bins, student_params={'lr': lr, 'eps': eps})
         teacher.learn()
-        teacher_cache = teacher
+        teacher_cache[eps] = teacher
     else:
-        teacher = teacher_cache
+        teacher = teacher_cache[eps]
 
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=T, anarchy_mode=True, student_params={'lr': lr})
     traj = [env.N]
@@ -43,7 +43,7 @@ def run_dp(eps=0, goal_length=3, bins=100, T=3, lr=0.1, max_steps=500):
     return traj
 
 
-def run_mcts(n_iters=500, eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
+def run_mcts(n_iters=500, eps=0, goal_length=3, T=3, lr=0.01, max_steps=500):
     teacher = TeacherPerfectKnowledge(goal_length=goal_length, T=T, student_qe=eps, student_lr=lr, n_iters=n_iters)
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=T, anarchy_mode=True, student_params={'lr': lr})
     traj = [env.N]
@@ -68,7 +68,7 @@ def run_mcts(n_iters=500, eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
     return traj
 
 
-def run_incremental(eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
+def run_incremental(eps=0, goal_length=3, T=3, lr=0.01, max_steps=500):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=T, student_params={'lr': lr})
     env.reset()
     traj = [env.N]
@@ -88,64 +88,64 @@ def run_incremental(eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
     
     return traj
 
-# <codecell>
-n_iters = 5
-N = 4
-lr = 0.1
-max_steps = 500
-bins = 10
-eps = -1.5
+# # <codecell>
+# n_iters = 5
+# N = 2
+# lr = 0.1
+# max_steps = 500
+# bins = 5
+# eps = 0
 
-mc_iters = 1000
+# mc_iters = 1000
 
-Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+# Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
-cases = [
-    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
-    Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
-]
+# cases = [
+#     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+#     Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+#     Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
+# ]
 
-for _ in tqdm(range(n_iters)):
-    for case in cases:
-        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
+# for _ in tqdm(range(n_iters)):
+#     for case in cases:
+#         case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
 
-# <codecell>
-fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+# # <codecell>
+# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
-for i, case in enumerate(cases):
-    label = {'label': case.name}
-    for run in case.runs:
-        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-        label = {}
+# for i, case in enumerate(cases):
+#     label = {'label': case.name}
+#     for run in case.runs:
+#         axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+#         label = {}
 
-axs[0].legend()
-axs[0].set_xlabel('Iteration')
-axs[0].set_ylabel('N')
-axs[0].set_yticks(np.arange(N) + 1)
+# axs[0].legend()
+# axs[0].set_xlabel('Iteration')
+# axs[0].set_ylabel('N')
+# axs[0].set_yticks(np.arange(N) + 1)
 
-all_lens = [[len(run) for run in case.runs] for case in cases]
-all_means = [np.mean(lens) for lens in all_lens]
-all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
-all_names = [case.name for case in cases]
+# all_lens = [[len(run) for run in case.runs] for case in cases]
+# all_means = [np.mean(lens) for lens in all_lens]
+# all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+# all_names = [case.name for case in cases]
 
-axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-axs[1].set_ylabel('Iterations')
+# axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
+# axs[1].set_ylabel('Iterations')
 
-fig.suptitle(f'Epsilon = {eps}')
-fig.tight_layout()
-# plt.savefig(f'fig/mcts_n_{N}_eps_{eps}_zoom.png')
-
+# fig.suptitle(f'Epsilon = {eps}')
+# fig.tight_layout()
+# # plt.savefig(f'../fig/pk_n_{N}_eps_{eps}.png')
 
 
 # %% LONG COMPARISON PLOT
 n_iters = 7
-N = 5
+N = 3
 lr = 0.1
 max_steps = 1000
 eps = np.arange(-2, 2.1, step=0.5)
 
 mc_iters = 1000
+bins = 50
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
@@ -153,6 +153,7 @@ all_cases = [
     (
         Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+        Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
     ) for e in eps
 ]
 
@@ -180,9 +181,9 @@ for case_set in cases:
 
 
 width = 0.2
-offset = np.array([-1, 0])
+offset = np.array([-1, 0, 1])
 x = np.arange(len(eps))
-names = ['Incremental', 'MCTS']
+names = ['Incremental', 'MCTS', 'DP']
 
 for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.bar(x+off, mean, yerr=se, width=width, label=name)
@@ -193,6 +194,4 @@ for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
 plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
-plt.savefig('../fig/mcts_performance_comparison.png')
-
-# %%
+plt.savefig('../fig/pk_performance_comparison.png')
