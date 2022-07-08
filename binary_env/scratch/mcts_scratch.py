@@ -57,51 +57,51 @@ def run_incremental(eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
     
     return traj
 
-# # <codecell>
-# n_iters = 3
-# N = 2
-# lr = 0.1
-# max_steps = 500
-# eps = -2.5
+# <codecell>
+n_iters = 5
+N = 4
+lr = 0.1
+max_steps = 500
+eps = -1.5
 
-# mc_iters = 1000
+mc_iters = 1000
 
-# Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
-# cases = [
-#     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-#     Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
-# ]
+cases = [
+    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+]
 
-# for _ in tqdm(range(n_iters)):
-#     for case in cases:
-#         case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
+for _ in tqdm(range(n_iters)):
+    for case in cases:
+        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
 
-# # <codecell>
-# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+# <codecell>
+fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
-# for i, case in enumerate(cases):
-#     label = {'label': case.name}
-#     for run in case.runs:
-#         axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-#         label = {}
+for i, case in enumerate(cases):
+    label = {'label': case.name}
+    for run in case.runs:
+        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        label = {}
 
-# axs[0].legend()
-# axs[0].set_xlabel('Iteration')
-# axs[0].set_ylabel('N')
-# axs[0].set_yticks(np.arange(N) + 1)
+axs[0].legend()
+axs[0].set_xlabel('Iteration')
+axs[0].set_ylabel('N')
+axs[0].set_yticks(np.arange(N) + 1)
 
-# all_lens = [[len(run) for run in case.runs] for case in cases]
-# all_means = [np.mean(lens) for lens in all_lens]
-# all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
-# all_names = [case.name for case in cases]
+all_lens = [[len(run) for run in case.runs] for case in cases]
+all_means = [np.mean(lens) for lens in all_lens]
+all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+all_names = [case.name for case in cases]
 
-# axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-# axs[1].set_ylabel('Iterations')
+axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
+axs[1].set_ylabel('Iterations')
 
-# fig.suptitle(f'Epsilon = {eps}')
-# fig.tight_layout()
-# # plt.savefig(f'fig/mcts_n_{N}_eps_{eps}_zoom.png')
+fig.suptitle(f'Epsilon = {eps}')
+fig.tight_layout()
+# plt.savefig(f'fig/mcts_n_{N}_eps_{eps}_zoom.png')
 
 
 

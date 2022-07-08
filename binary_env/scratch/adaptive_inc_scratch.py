@@ -188,9 +188,9 @@ def sig(x):
 # <codecell>
 n_iters = 5
 max_steps = 5000
-eps = 6.5
+eps = 1
 tau = np.exp(-0.05) * sig(eps)
-tau = 0.5
+# tau = 0.5
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 

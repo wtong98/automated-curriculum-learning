@@ -176,9 +176,10 @@ class Student(Agent):
     def update(self, old_state, _, reward, next_state, is_done):
         if is_done:
             exp_q = 0
+            if reward == 0:  # null update to failing q(*,0) value
+                return
         else:
             _, prob = self.policy(next_state)
-            # exp_q = prob * (self.q_e[next_state] + self.q_r[next_state])
             exp_q = prob * self.q_r[next_state]
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
 
@@ -691,9 +692,6 @@ class TeacherPerfectKnowledgeDp(Agent):
             n_round_places)
         self.states = self._combo(self.state_axis, self.N)
 
-        fail_axis = np.arange(self.N + 1)
-        self.fails = self._combo(fail_axis, self.T)
-
         rand_ints = np.random.randint(self.N, size=len(self.states)) + 1
         self.policy = {s:a for s, a in zip(self.states, rand_ints)}
         self.value = {s:0 for s in self.states}
@@ -757,14 +755,18 @@ class TeacherPerfectKnowledgeDp(Agent):
     
     def _compute_prob(self, state, action):
         logprobs = {s:-np.inf for s in self.states}
+        eps = self.student_params['eps']
 
-        for run in self.fails:
+        fail_axis = np.arange(action + 1)
+        fails = self._combo(fail_axis, self.T)
+
+        for run in fails:
             qr = np.array(state)
             cum_log_prob = 0
             for fail_idx in run:
-                cum_log_prob += np.sum(self._logsig(qr[:fail_idx]))
-                if fail_idx < len(self.N):
-                    cum_log_prob += np.log(1 - self._sig(qr[fail_idx]))
+                cum_log_prob += np.sum(self._logsig(qr[:fail_idx] + eps))
+                if fail_idx < action:
+                    cum_log_prob += np.log(1 - self._sig(qr[fail_idx] + eps))
 
                 qr = self._update_qr(action, qr, fail_idx)
             
@@ -778,10 +780,11 @@ class TeacherPerfectKnowledgeDp(Agent):
         if fail_idx == n:
             payoff = self.student_params['reward']
         else:
-            payoff = 0
+            payoff = self._sig(qr[fail_idx] + self.student_params['eps']) * qr[fail_idx]
         
-        rpe = np.append(self._sig(qr[1:fail_idx+1]) * qr[1:fail_idx+1], payoff) - qr[:fail_idx+1]
-        qr[:fail_idx+1] += self.student_params['lr'] * rpe
+        probs = self._sig(qr[1:fail_idx] + self.student_params['eps'])
+        rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
+        qr[:fail_idx] += self.student_params['lr'] * rpe
         return qr
     
     def _sig(self, val):
@@ -799,33 +802,39 @@ class TeacherPerfectKnowledgeDp(Agent):
 
     
 # <codecell>
-# TODO: test policy iteration stuff
-eps = 0
+eps = 10
 
 teacher = TeacherPerfectKnowledgeDp(goal_length=3, train_iters=3, n_bins_per_q=100, student_params={
     'lr': 0.1,
     'eps': eps
 })
 
-student = Student(lr=0.1, q_e=eps)
-env = BinaryEnv(3, reward=10)
-qr = np.zeros(3)
+logprobs = teacher._compute_prob((0., 0., 0.), 2)
+tmp = {k:v for k,v in logprobs.items() if v != -np.inf}
+probs = np.exp(np.array(list(logprobs.values())))
+print('logprobs', tmp)
+print('total', np.sum(probs))
 
-for _ in range(100):
-    is_done = False
-    state = env.reset()
-    while not is_done:
-        action = student.next_action(state)
-        next_state, reward, is_done, _ = env.step(action)
-        student.update(state, action, reward, next_state, is_done)
-        state = next_state
+
+# student = Student(lr=0.1, q_e=eps)
+# env = BinaryEnv(2, reward=10)
+# qr = np.zeros(3)
+
+# for _ in range(3):
+#     is_done = False
+#     state = env.reset()
+#     while not is_done:
+#         action = student.next_action(state)
+#         next_state, reward, is_done, _ = env.step(action)
+#         student.update(state, action, reward, next_state, is_done)
+#         state = next_state
     
-    fail_idx = env.loc
-    qr = teacher._update_qr(3, qr, fail_idx)
-    print('--')
-    print('Fail:', fail_idx)
-    print('Estimd:', qr)
-    print('Actual:', list(student.q_r.values()))
+#     fail_idx = env.loc
+#     qr = teacher._update_qr(2, qr, fail_idx)
+#     print('--')
+#     print('Fail:', fail_idx)
+#     print('Estimd:', qr)
+#     print('Actual:', list(student.q_r.values()))
 
 
 
