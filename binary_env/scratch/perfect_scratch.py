@@ -142,7 +142,7 @@ n_iters = 7
 N = 3
 lr = 0.1
 max_steps = 1000
-eps = np.arange(-2, 2.1, step=0.5)
+eps = np.arange(-1.5, 1.6, step=0.5)
 
 mc_iters = 1000
 bins = 50
