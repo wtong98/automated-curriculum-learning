@@ -12,6 +12,37 @@ sys.path.append('../')
 from env import *
 
 # <codecell>
+teacher_cache = None
+def run_dp(eps=0, goal_length=3, bins=100, T=3, lr=0.1, max_steps=500):
+    global teacher_cache
+    if teacher_cache == None:
+        teacher = TeacherPerfectKnowledgeDp(goal_length=goal_length, train_iters=T, n_bins_per_q=bins, student_params={'lr': lr, 'eps': eps})
+        teacher.learn()
+        teacher_cache = teacher
+    else:
+        teacher = teacher_cache
+
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=T, anarchy_mode=True, student_params={'lr': lr})
+    traj = [env.N]
+    env.reset()
+
+    N = goal_length
+    qr = np.zeros(N)
+
+    for _ in range(max_steps):
+        a = teacher.next_action(qr)
+        _, _, is_done, _ = env.step(a)
+        traj.append(a)
+
+        if is_done:
+            break
+
+        # print(f'action: {a}  state: {state}')
+        qr = np.array([env.student.q_r[i] for i in range(N)])
+
+    return traj
+
+
 def run_mcts(n_iters=500, eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
     teacher = TeacherPerfectKnowledge(goal_length=goal_length, T=T, student_qe=eps, student_lr=lr, n_iters=n_iters)
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=T, anarchy_mode=True, student_params={'lr': lr})
@@ -24,7 +55,7 @@ def run_mcts(n_iters=500, eps=0, goal_length=3, T=50, lr=0.01, max_steps=500):
 
     for _ in range(max_steps):
         a = teacher.next_action(prev_a, qr)
-        state, _, is_done, _ = env.step(a)
+        _, _, is_done, _ = env.step(a)
         traj.append(a)
 
         if is_done:
@@ -62,6 +93,7 @@ n_iters = 5
 N = 4
 lr = 0.1
 max_steps = 500
+bins = 10
 eps = -1.5
 
 mc_iters = 1000
@@ -71,6 +103,7 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 cases = [
     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+    Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
