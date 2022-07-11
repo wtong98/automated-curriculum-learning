@@ -90,11 +90,11 @@ def run_incremental(eps=0, goal_length=3, T=3, lr=0.01, max_steps=500):
 
 # # <codecell>
 # n_iters = 5
-# N = 2
+# N = 3
 # lr = 0.1
 # max_steps = 500
-# bins = 5
-# eps = 0
+# bins = 10
+# eps = -1.5
 
 # mc_iters = 1000
 
@@ -102,7 +102,7 @@ def run_incremental(eps=0, goal_length=3, T=3, lr=0.01, max_steps=500):
 
 # cases = [
 #     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-#     Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+#     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
 #     Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 # ]
 
@@ -142,10 +142,10 @@ n_iters = 7
 N = 3
 lr = 0.1
 max_steps = 1000
-eps = np.arange(-1.5, 1.6, step=0.5)
+eps = np.arange(-2, 2.1, step=0.5)
 
 mc_iters = 1000
-bins = 50
+bins = 10
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
@@ -195,3 +195,63 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 plt.savefig('../fig/pk_performance_comparison.png')
+
+
+# <codecell>  INSPECT DP POLICY
+# eps = np.arange(-2, 2.1, step=0.5)
+# N = 3
+# bins = 10
+
+all_policies = []
+for e in tqdm(eps):
+    teacher = TeacherPerfectKnowledgeDp(goal_length=N, train_iters=3, n_bins_per_q=bins, student_params={'eps': e})
+    teacher.learn()
+    all_policies.append(teacher.policy)
+
+# <codecell>
+slices = teacher.state_axis
+
+fig, axs = plt.subplots(len(eps), bins, figsize=(bins * 3, len(eps) * 3))
+mpb = None
+
+for e, policy, ax_set in zip(eps, all_policies, axs):
+    for ax, q3 in zip(ax_set.ravel(), slices):
+        img = np.zeros((bins, bins))
+        for q1_idx, q1 in enumerate(slices):
+            for q2_idx, q2 in enumerate(slices):
+                img[q1_idx, q2_idx] = policy[(q1, q2, q3)]
+        mpb = ax.imshow(img)
+        ax.set_title(f'q3={q3}')
+        ax.set_xlabel('q2')
+        ax.set_xticklabels([0] + list(slices))
+        ax.set_ylabel(f'q1, eps={e}')
+        ax.set_yticklabels([0] + list(slices))
+
+    fig.colorbar(mpb, ticks=np.arange(N) + 1, ax=ax)
+
+fig.tight_layout()
+plt.savefig(f'../fig/pk_policy_n_{N}_bins_{bins}', dpi=300)
+
+
+# %%
+# teacher = teacher_cache[-1.5]
+# slices = teacher.state_axis
+# mpb = None
+
+# fig, axs = plt.subplots(1, bins, figsize=(3 * bins, 3))
+
+# for ax, q3 in zip(axs, slices):
+#     img = np.zeros((bins, bins))
+#     for q1_idx, q1 in enumerate(slices):
+#         for q2_idx, q2 in enumerate(slices):
+#             img[q1_idx, q2_idx] = teacher.policy[(q1, q2, q3)]
+#     mpb = ax.imshow(img)
+#     ax.set_title(f'q3={q3}')
+#     ax.set_xlabel('q2')
+#     ax.set_xticklabels([0] + list(slices))
+#     ax.set_ylabel(f'q1, eps={e}')
+#     ax.set_yticklabels([0] + list(slices))
+
+# fig.colorbar(mpb, ticks=np.arange(N) + 1, ax=ax)
+# fig.tight_layout()
+# %%

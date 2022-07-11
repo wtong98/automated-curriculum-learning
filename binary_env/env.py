@@ -761,7 +761,7 @@ class TeacherPerfectKnowledgeDp(Agent):
         val = 0
         for next_state, logprob in [(k, v) for k, v in logprobs.items() if v != -np.inf]:
             state_logprobs = self._logsig(np.array(next_state) + self.student_params['eps'])
-            if -np.sum(state_logprobs) < self.p_eps:
+            if action == self.N and -np.sum(state_logprobs) < self.p_eps:
                 update = self.reward
             else:
                 update = self.gamma * self.value[next_state]
