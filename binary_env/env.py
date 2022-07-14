@@ -49,7 +49,7 @@ class BinaryEnv(gym.Env):
 
 
 class CurriculumEnv(gym.Env):
-    def __init__(self, goal_length=10, train_iter=50, 
+    def __init__(self, goal_length=10, train_iter=50, train_round=None,
                  p_eps=0.05, 
                  teacher_reward=1,
                  student_reward=1,
@@ -61,6 +61,7 @@ class CurriculumEnv(gym.Env):
         self.student = None
         self.goal_length = goal_length
         self.train_iter = train_iter
+        self.train_round = train_round
         self.p_eps = p_eps
         self.teacher_reward = teacher_reward
         self.student_reward = student_reward
@@ -82,27 +83,26 @@ class CurriculumEnv(gym.Env):
             d_length = action - 1
             self.N = np.clip(self.N + d_length, 1, self.goal_length)
 
-        prob = np.exp(self._get_score(self.N))
+        self.student.learn(BinaryEnv(self.N, reward=self.student_reward), max_iters=self.train_iter, max_rounds=self.train_round)
+        log_prob = self._get_score(self.N)
         reward = 0
         is_done = False
 
-        if self.N == self.goal_length and (1 - prob) < self.p_eps:
+        if self.N == self.goal_length and -log_prob < self.p_eps:
             reward = self.teacher_reward
             is_done = True
-        
-        # log_prob = self._get_score(self.N)
-        log_prob = np.log(prob)
+
         return (self.N, log_prob), reward, is_done, {}
     
     def reset(self):
         self.student = Student(q_e=self.student_qe_dist, **self.student_params)
         student_score = self._get_score(self.goal_length, train=False)
         self.N  = 1
-        return (self.goal_length, student_score)
+        return (self.N, student_score)
 
     def _get_score(self, length, train=True):
-        if train:
-            self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
+        # if train:
+        #     self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
         return self.student.score(length)
 
 
@@ -118,6 +118,7 @@ class Agent:
     
     def learn(self, env, is_eval=False,
              max_iters=1000, 
+             max_rounds=None,
              use_tqdm=False, 
              post_hook=None, done_hook=None):
         state = env.reset()
@@ -140,6 +141,12 @@ class Agent:
                 if done_hook != None:
                     done_hook(self, reward)
                 state = env.reset()
+
+                if max_rounds != None:
+                    if max_rounds == 0:
+                        break
+                    else:
+                        max_rounds -= 1
             else:
                 state = next_state
             
