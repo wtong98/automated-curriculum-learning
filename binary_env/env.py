@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-def sigmoid(x):
+def sig(x):
     return 1 / (1 + np.exp(-x))
 
 
@@ -83,7 +83,12 @@ class CurriculumEnv(gym.Env):
             d_length = action - 1
             self.N = np.clip(self.N + d_length, 1, self.goal_length)
 
-        self.student.learn(BinaryEnv(self.N, reward=self.student_reward), max_iters=self.train_iter, max_rounds=self.train_round)
+        trans = []
+        def _update_trans(_, reward):
+            result = int(reward > 0)
+            trans.append(result)
+
+        self.student.learn(BinaryEnv(self.N, reward=self.student_reward), max_iters=self.train_iter, max_rounds=self.train_round, done_hook=_update_trans)
         log_prob = self._get_score(self.N)
         reward = 0
         is_done = False
@@ -92,7 +97,7 @@ class CurriculumEnv(gym.Env):
             reward = self.teacher_reward
             is_done = True
 
-        return (self.N, log_prob), reward, is_done, {}
+        return (self.N, log_prob), reward, is_done, {'transcript': trans}
     
     def reset(self):
         self.student = Student(q_e=self.student_qe_dist, **self.student_params)
@@ -172,7 +177,7 @@ class Student(Agent):
     # softmax policy
     def policy(self, state) -> np.ndarray:
         q = self.q_e[state] + self.q_r[state]
-        prob = sigmoid(q)
+        prob = sig(q)
         return np.array([1 - prob, prob])
 
     def next_action(self, state) -> int:
@@ -823,8 +828,7 @@ class TeacherPerfectKnowledgeDp(Agent):
     def update(old_state, action, reward, next_state, is_done):
         raise NotImplementedError('Use learn() to train agent directly')
 
-# <codecell>
-# teacher = TeacherPerfectKnowledgeDp(goal_length=3, train_iters=3, n_bins_per_q=50)
-# teacher.learn(with_tqdm=False)
+
+
 
 # %%
