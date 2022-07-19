@@ -24,11 +24,14 @@ class UncertainCurriculumEnv(CurriculumEnv):
 
 
 class TeacherUncertainOsc(Agent):
-    def __init__(self, goal_length, tau=0.95, conf=0.75, max_m_factor=3) -> None:
+    def __init__(self, goal_length, tau=0.95, conf=0.75, max_m_factor=3, with_backtrack=False, bt_tau=0.05, bt_conf=0.75) -> None:
         super().__init__()
         self.goal_length = goal_length
         self.tau = tau
         self.conf = conf
+        self.with_backtrack = with_backtrack
+        self.bt_tau = bt_tau
+        self.bt_conf = bt_conf
 
         self.trans_dict = defaultdict(list)
         self.n = 1
@@ -46,12 +49,14 @@ class TeacherUncertainOsc(Agent):
         if self.do_jump():
             self.n = min(self.n + 1, self.goal_length)
             next_n = self.n
+        elif self.with_backtrack and self.do_dive():
+            self.n = max(self.n - 1, 1)
+            next_n = self.n
         elif next_n == curr_n:
             next_n = max(self.n - 1, 1)
         
         return next_n
     
-    # TODO: compute all probs to decide when to return
     def do_jump(self):
         trans = self.trans_dict[self.n]
         for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
@@ -60,11 +65,27 @@ class TeacherUncertainOsc(Agent):
                 return True
 
         return False
+
+    def do_dive(self):
+        if self.n == 1:
+            return
+
+        trans = self.trans_dict[self.n - 1]
+        rev_trans = [not bit for bit in trans]
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(rev_trans[-k:], 1 - self.bt_tau)
+            if prob_good >= self.bt_conf:
+                return True
+        
+        return False
     
-    def _get_prob_good(self, transcript):
+    def _get_prob_good(self, transcript, tau=None):
+        if tau == None:
+            tau = self.tau
+
         success = np.sum(transcript)
         total = len(transcript)
-        prob_bad = beta.cdf(self.tau, a=success+1, b=total-success+1)
+        prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
         return 1 - prob_bad
         
 
@@ -89,8 +110,8 @@ def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
     return traj
 
 
-def run_osc(eps=0, confidence=0.75, goal_length=3, T=3, max_steps=1000, lr=0.1):
-    teacher = TeacherUncertainOsc(goal_length, conf=confidence)
+def run_osc(eps=0, confidence=0.75, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
+    teacher = TeacherUncertainOsc(goal_length, conf=confidence, **teacher_kwargs)
     env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     traj = [env.N]
     env.reset()
@@ -160,9 +181,9 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
 n_iters = 5
 N = 5
 lr = 0.1
-max_steps = 1000
+max_steps = 10000
 bins = 10
-eps = 0
+eps = -5
 conf=0.2
 
 mc_iters = 1000
@@ -170,9 +191,10 @@ mc_iters = 1000
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+    # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+    Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
@@ -194,6 +216,8 @@ axs[0].set_xlabel('Iteration')
 axs[0].set_ylabel('N')
 axs[0].set_yticks(np.arange(N) + 1)
 
+# axs[0].set_xlim((800, 900))
+
 all_lens = [[len(run) for run in case.runs] for case in cases]
 all_means = [np.mean(lens) for lens in all_lens]
 all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
@@ -204,18 +228,21 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
-# plt.savefig(f'../fig/pk_n_{N}_eps_{eps}.png')
+# plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
 
 # %% LONG COMPARISON PLOT
 n_iters = 10
 N = 3
 lr = 0.1
-max_steps = 2000
+max_steps = 10000
 gamma = 0.95
-conf = 0.9
+conf = 0.2
+bt_conf = 0.2
+bt_tau = 0.05
 # eps = np.arange(-2, 2.1, step=0.5)
-eps = np.arange(-5, -1, step=0.5)
+# eps = np.arange(-5, -1, step=0.5)
+eps = np.arange(-7, -3, step=0.5)
 
 mc_iters = 1000
 bins = 10
@@ -226,7 +253,8 @@ all_cases = [
     (
         # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
     ) for e in eps
@@ -256,11 +284,14 @@ for case_set in cases:
 
 
 width = 0.2
+# offset = np.array([-2, -1, 0, 1])
 # offset = np.array([-1, 0, 1])
 offset = np.array([-1, 0])
 x = np.arange(len(eps))
-# names = ['Incremental', 'Incremental (w/ BT)', 'Uncertain Osc']
-names = ['Incremental (w/ BT)', 'Uncertain Osc']
+# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
+# names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
+# names = ['Incremental (w/ BT)', 'Uncertain Osc']
+names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
 
 for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.bar(x+off, mean, yerr=se, width=width, label=name)
@@ -271,5 +302,5 @@ for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
 plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
-plt.savefig(f'../fig/osc_perf_low_eps_conf_{conf}.png')
+# plt.savefig(f'../fig/osc_perf_very_low_eps_conf_{conf}_bt_tau_{bt_tau}.png')
 # %%
