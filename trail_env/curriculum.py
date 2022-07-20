@@ -4,7 +4,10 @@ Training schedules
 author: William Tong (wtong@g.harvard.edu)
 """
 
+from collections import defaultdict
+from itertools import chain, zip_longest
 import numpy as np
+from scipy.stats import beta
 
 from stable_baselines3.common.callbacks import BaseCallback
 
@@ -24,6 +27,7 @@ class CurriculumCallback(BaseCallback):
     def _on_training_start(self) -> None:
         self.teacher.load_logger(self.logger)
         self.teacher.load_student(self.model, self.eval_env)
+        self.teacher.load_training_env(self.training_env)
         self.curr_ckpt = self.teacher.next_checkpoint()
         self.training_env.env_method('queue_map', self.curr_ckpt['map'])
 
@@ -103,6 +107,7 @@ class Teacher:
         self.fresh = True
         self.trajectory = []
         self.logger = None
+        self.training_env = None
     
     def load_logger(self, logger):
         self.logger = logger
@@ -112,6 +117,10 @@ class Teacher:
         self.eval_env = eval_env
         self.fresh = True
         self.trajectory = []
+        self.history = defaultdict(list)
+    
+    def load_training_env(self, env):
+        self.training_env = env
     
     def next_checkpoint(self):
         if self.student == None or self.eval_env == None:
@@ -120,6 +129,7 @@ class Teacher:
         if not self.fresh:
             success_prob = self._test_student(self.eval_env)
             self.trajectory.append((self.sched_idx, success_prob))
+            self.history[self.sched_idx].extend(self._interleave(self.training_env.get_attr('history')))
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
                 self.logger.record('trajectory/success_prob', success_prob)
@@ -131,6 +141,10 @@ class Teacher:
             'iters': self.n_iters_per_ckpt,
             'map': self.trail_class(length=self.length_schedule[self.sched_idx], **self.trail_args)
         }
+
+    def _interleave(self, histories):
+        all_hist = [h for h in chain.from_iterable(zip_longest(*histories)) if h != None]
+        return all_hist
 
     def _update_sched_idx(self):
         raise NotImplementedError('implement _update_sched_idx() in child class')
@@ -153,9 +167,9 @@ class Teacher:
 
 
 class IncrementalTeacher(Teacher):
-    def __init__(self, **teacher_kwargs):
+    def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
-        self.prob_threshold = 0.9
+        self.prob_threshold = tau
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
@@ -163,8 +177,63 @@ class IncrementalTeacher(Teacher):
         if prob > self.prob_threshold:
             self.sched_idx += 1
             if self.sched_idx == len(self.length_schedule):
-                print('FINAL SCHED IDX', self.sched_idx)
                 raise StopIteration
+
+
+class OscillatingTeacher(Teacher):
+    def __init__(self, tau=0.95, conf=0.2, max_m_factor=3, **teacher_kwargs):
+        super().__init__(**teacher_kwargs)
+        self.tau = tau
+        self.conf = conf
+
+        raw_min_m = np.log(1 - conf) / np.log(tau) - 1
+        self.min_m = int(np.floor(raw_min_m))
+        self.max_m = int(self.min_m * max_m_factor)
+        self.curr_idx = 0
+    
+    def _update_sched_idx(self):
+        trans = self.history[self.sched_idx]
+
+        if self.do_jump(trans):
+            self.curr_idx += 1
+            self.sched_idx = self.curr_idx
+        elif self.do_dive(trans):
+            self.curr_idx = max(self.curr_idx - 1, 0)
+            self.sched_idx = self.curr_idx
+        else:
+            if self.sched_idx == self.curr_idx:
+                self.sched_idx = max(self.curr_idx - 1, 0)
+            else:
+                self.sched_idx = self.curr_idx
+        
+        if self.sched_idx == len(self.length_schedule):
+            if self.trajectory[-1][1] > self.tau:
+                raise StopIteration
+            else:
+                self.sched_idx -= 1   # not yet ready to terminate
+
+    def do_jump(self, trans):
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(trans[-k:])
+            if prob_good >= self.conf:
+                return True
+
+        return False
+
+    def do_dive(self, trans):
+        rev_trans = [not bit for bit in trans]
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(rev_trans[-k:])
+            if prob_good >= self.conf:
+                return True
+        
+        return False
+
+    def _get_prob_good(self, transcript):
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(self.tau, a=success+1, b=total-success+1)
+        return 1 - prob_bad
 
 
 class RandomTeacher(Teacher):

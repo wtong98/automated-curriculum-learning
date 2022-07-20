@@ -66,6 +66,7 @@ class TrailEnv(gym.Env):
         self.map = trail_map
         self.agent = TrailAgent(self.map, TrailEnv.view_distance, scale=TrailEnv.observation_scale, y_adjust=TrailEnv.y_adjust)
         self.curr_step = 0
+        self.history = []
 
     def step(self, action):
         if self.discrete:
@@ -96,6 +97,9 @@ class TrailEnv(gym.Env):
 
         self.curr_step += 1
 
+        if is_done:
+            self.history.append(int(is_success))
+
         return obs, reward, is_done, {'is_success': is_success}
 
     def reset(self):
@@ -104,6 +108,7 @@ class TrailEnv(gym.Env):
             print('SWITCHING TO MAP:', self.next_map)
             self.map = self.next_map
             self.next_map = None
+            self.history = []
         else:
             self.map.reset()
 
