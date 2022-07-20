@@ -179,11 +179,11 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
 
 # <codecell>
 n_iters = 5
-N = 5
+N = 10
 lr = 0.1
 max_steps = 10000
 bins = 10
-eps = -5
+eps = -2
 conf=0.2
 
 mc_iters = 1000
@@ -191,9 +191,9 @@ mc_iters = 1000
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+    Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
@@ -233,16 +233,16 @@ fig.tight_layout()
 
 # %% LONG COMPARISON PLOT
 n_iters = 10
-N = 3
+N = 10
 lr = 0.1
 max_steps = 10000
 gamma = 0.95
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-# eps = np.arange(-2, 2.1, step=0.5)
+eps = np.arange(-2, 2.1, step=0.5)
 # eps = np.arange(-5, -1, step=0.5)
-eps = np.arange(-7, -3, step=0.5)
+# eps = np.arange(-7, -3, step=0.5)
 
 mc_iters = 1000
 bins = 10
@@ -251,9 +251,9 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
         Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
@@ -277,21 +277,23 @@ for case_set in cases:
     for case in case_set:
         run_lens = [len(run) for run in case.runs]
         curr_means.append(np.mean(run_lens))
-        curr_ses.append(np.std(run_lens) / np.sqrt(n_iters))
+        curr_ses.append(2 * np.std(run_lens) / np.sqrt(n_iters))
 
     all_means.append(curr_means)
     all_ses.append(curr_ses)
 
 
 width = 0.2
-# offset = np.array([-2, -1, 0, 1])
+offset = np.array([-2, -1, 0, 1])
 # offset = np.array([-1, 0, 1])
-offset = np.array([-1, 0])
+# offset = np.array([-1, 0])
 x = np.arange(len(eps))
-# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
+names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
-names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
+# names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
+
+plt.yscale('log')
 
 for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.bar(x+off, mean, yerr=se, width=width, label=name)
@@ -302,5 +304,6 @@ for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
 plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
-# plt.savefig(f'../fig/osc_perf_very_low_eps_conf_{conf}_bt_tau_{bt_tau}.png')
+
+plt.savefig(f'../fig/osc_perf_n_{N}.png')
 # %%
