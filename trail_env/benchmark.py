@@ -49,7 +49,7 @@ Case = namedtuple('Case', ['name', 'teacher', 'params', 'traj'])
 if __name__ == '__main__':
     n_runs = 5
     len_sched = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    # len_sched = [10, 20, 30]
+    # len_sched = [10, 20, 30, 40, 50]
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])

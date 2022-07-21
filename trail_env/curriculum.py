@@ -193,9 +193,10 @@ class OscillatingTeacher(Teacher):
     
     def _update_sched_idx(self):
         trans = self.history[self.sched_idx]
+        _, prob = self.trajectory[-1]
 
         if self.do_jump(trans):
-            self.curr_idx += 1
+            self.curr_idx = min(self.curr_idx + 1, len(self.length_schedule) - 1)
             self.sched_idx = self.curr_idx
         elif self.do_dive(trans):
             self.curr_idx = max(self.curr_idx - 1, 0)
@@ -206,11 +207,8 @@ class OscillatingTeacher(Teacher):
             else:
                 self.sched_idx = self.curr_idx
         
-        if self.sched_idx == len(self.length_schedule):
-            if self.trajectory[-1][1] > self.tau:
-                raise StopIteration
-            else:
-                self.sched_idx -= 1   # not yet ready to terminate
+        if self.curr_idx == len(self.length_schedule) - 1 and prob > self.tau:
+            raise StopIteration
 
     def do_jump(self, trans):
         for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
