@@ -12,9 +12,10 @@ sys.path.append('../')
 from env import *
 
 # <codecell>
-N = 5
-T = 50
-student_lr = 0.002
+N = 3
+T = 5
+# student_lr = 0.002
+student_lr = 0.01
 p_eps = 0.1
 L = 10
 gamma = 0.95
@@ -30,7 +31,7 @@ agent = TeacherPomcpAgent(goal_length=N,
                           lookahead_cap=lookahead_cap, 
                           T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, 
                           n_particles=1500, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
-env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_params={'lr': student_lr, 'q_e': es})
+env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 prev_obs = env.reset()
 prev_a = None
@@ -61,7 +62,7 @@ steps = np.arange(len(agent.num_particles))
 
 for i in range(N):
     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
-    axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
+    axs[0].plot(steps, [q[i] for q in qrs_true], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
 
 axs[0].legend()
 axs[0].set_xlabel('Step')
@@ -74,7 +75,7 @@ axs[1].set_ylabel('# particles')
 fig.suptitle('State estimates of POMCP agent')
 fig.tight_layout()
 
-plt.savefig('../fig/pomcp_state_estimate.png')
+# plt.savefig('../fig/pomcp_state_estimate.png')
 
 # <codecell>
 ### PLOT REPLICAS
@@ -95,20 +96,21 @@ plt.plot(entr)
 plt.title('Entropy of actions across iterations')
 plt.ylabel('Entropy')
 plt.xlabel('Iteration')
-plt.savefig('fig/pomcp_entropy_actions.png')
+# plt.savefig('fig/pomcp_entropy_actions.png')
 
 # %%
 # <codecell>
 ### INVESTIGATE CLOSENESS OF MODEL TO REALITY
 N = 10
-T = 50
-student_lr = 0.002
+T = 5
+student_lr = 0.05
 p_eps = 0.1
 L = 10
 es = np.zeros(N)
+lookahead_cap = 1
 
 agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
-env = CurriculumEnv(goal_length=N, train_iter=T, p_eps=p_eps, teacher_reward=10, student_reward=10, lr=student_lr, q_e=es)
+env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 iters = 100
 
@@ -152,7 +154,7 @@ plt.legend()
 plt.title('Predicted vs. true observations')
 plt.xlabel('Iteration')
 plt.ylabel('Observation')
-plt.savefig('fig/pomcp_debug_obs.png')
+# plt.savefig('fig/pomcp_debug_obs.png')
 
 # %%
 plt.plot([q[0] for q in all_pred_qrs], '--o', label='Pred qr[0]')
@@ -164,4 +166,5 @@ plt.legend()
 plt.title('Predicted vs true states')
 plt.xlabel('Iteration')
 plt.ylabel('Q')
-plt.savefig('fig/pomcp_debug_state.png')
+# plt.savefig('fig/pomcp_debug_state.png')
+# %%

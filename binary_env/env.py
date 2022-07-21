@@ -299,11 +299,15 @@ class TeacherPomcpAgent(Agent):
         self.bins = bins
         self.p_eps = p_eps
         self.lookahead_cap = lookahead_cap
-        self.student_qe = student_qe
         self.student_lr = student_lr
         self.student_reward = student_reward
         self.q_reinv_scale = q_reinv_scale
         self.q_reinv_prob = q_reinv_prob
+
+        if isinstance(student_qe, numbers.Number):
+            self.student_qe = np.ones(goal_length) * student_qe
+        else:
+            self.student_qe = student_qe
 
         self.n_particles = n_particles
         self.gamma = gamma

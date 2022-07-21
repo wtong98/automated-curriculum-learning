@@ -13,7 +13,6 @@ sys.path.append('../')
 
 from env import *
 
-# <codecell>
 class UncertainCurriculumEnv(CurriculumEnv):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -176,14 +175,50 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
+def run_pomcp(n_iters=1500, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
+    agent = TeacherPomcpAgent(goal_length=N, 
+                            lookahead_cap=1, 
+                            T=T, bins=10, p_eps=0.05, student_qe=eps, student_lr=lr, gamma=gamma, 
+                            n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0.25)
+    env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
+    traj = [env.N]
+    prev_obs = env.reset()
+    prev_a = None
+
+    for _ in range(max_steps):
+        a = agent.next_action(prev_a, prev_obs, with_replicas=0)
+
+        state, _, is_done, _ = env.step(a)
+        traj.append(a)
+
+        obs = agent._to_bin(state[1])
+        prev_a = a
+        prev_obs = obs
+
+        if is_done:
+            break
+    
+    return traj
+
+
+def run_pomcp_with_retry(max_retries=5, **kwargs):
+    for i in range(max_retries):
+        try:
+            return run_pomcp(**kwargs)
+        except Exception as e:
+            print('pomcp failure', i+1)
+            print(e)
+    
+'''
 
 # <codecell>
 n_iters = 5
-N = 10
-lr = 0.1
+T = 5
+N = 3
+lr = 0.01
 max_steps = 10000
 bins = 10
-eps = -2
+eps = 0
 conf=0.2
 
 mc_iters = 1000
@@ -195,13 +230,14 @@ cases = [
     Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
     for case in cases:
-        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
+        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
 # %%
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
@@ -229,12 +265,14 @@ axs[1].set_ylabel('Iterations')
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
+'''
 
 
 # %% LONG COMPARISON PLOT
-n_iters = 10
-N = 10
-lr = 0.1
+n_iters = 5
+N = 3
+T = 5
+lr = 0.01
 max_steps = 10000
 gamma = 0.95
 conf = 0.2
@@ -255,6 +293,7 @@ all_cases = [
         Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
         Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
+        Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
     ) for e in eps
@@ -263,7 +302,7 @@ all_cases = [
 for _ in tqdm(range(n_iters)):
     for cases in all_cases:
         for case in cases:
-            case.runs.append(case.run_func(**case.run_params, max_steps=max_steps))
+            case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
 
 # <codecell>
 cases = zip(*all_cases)
@@ -283,17 +322,17 @@ for case_set in cases:
     all_ses.append(curr_ses)
 
 
-width = 0.2
-offset = np.array([-2, -1, 0, 1])
+width = 0.15
+offset = np.array([-2, -1, 0, 1, 2])
 # offset = np.array([-1, 0, 1])
 # offset = np.array([-1, 0])
 x = np.arange(len(eps))
-names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
+names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
 
-plt.yscale('log')
+# plt.yscale('log')
 
 for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.bar(x+off, mean, yerr=se, width=width, label=name)
