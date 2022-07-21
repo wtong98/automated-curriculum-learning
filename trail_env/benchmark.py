@@ -37,7 +37,7 @@ def make_model():
                 )
 
 def run_session(student, teacher, eval_env):
-    student.learn(total_timesteps=1000000, 
+    student.learn(total_timesteps=100000, 
                   log_interval=5,
                   eval_env=eval_env, 
                   eval_freq=512, 
@@ -48,8 +48,8 @@ Case = namedtuple('Case', ['name', 'teacher', 'params', 'traj'])
 
 if __name__ == '__main__':
     n_runs = 5
-    len_sched = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    # len_sched = [10, 20, 30, 40, 50]
+    # len_sched = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    len_sched = [10, 20, 30]
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
@@ -57,7 +57,8 @@ if __name__ == '__main__':
 
     cases = [
         Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        Case('Oscillator', OscillatingTeacher, {'len_sched': len_sched}, [])
+        Case('Oscillator', OscillatingTeacher, {'len_sched': len_sched}, []),
+        Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
     ]
 
     for _ in tqdm(range(n_runs)):
@@ -84,7 +85,7 @@ if __name__ == '__main__':
     axs[0].legend()
     axs[0].set_xlabel('Iteration')
     axs[0].set_ylabel('Schedule index')
-    axs[0].set_yticks(np.arange(len(len_sched)) + 1)
+    axs[0].set_yticks(np.arange(len(len_sched)))
 
     # axs[0].set_xlim((800, 900))
 

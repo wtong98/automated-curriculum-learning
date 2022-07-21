@@ -164,6 +164,19 @@ class Teacher:
                 total_success += 1
         
         return total_success / self.n_test_episodes
+    
+
+class NaiveTeacher(Teacher):
+    def __init__(self, tau=0.95, len_sched=None):
+        super().__init__(len_sched)
+        self.prob_threshold = tau
+    
+    def _update_sched_idx(self):
+        _, prob = self.trajectory[-1]
+        self.sched_idx = len(self.length_schedule) - 1
+
+        if prob > self.prob_threshold:
+            raise StopIteration
 
 
 class IncrementalTeacher(Teacher):
