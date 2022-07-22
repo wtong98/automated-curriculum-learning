@@ -164,7 +164,7 @@ class TrailAgent:
 
     def get_reward(self) -> Tuple[float, bool]:
         # reward = 10 * (self.odor_history[-1][0] - self.odor_history[-2][0])
-        reward = -2
+        reward = 0
         is_success = False
 
         if np.isclose(self.map.sample(*self.position), 0, atol=1e-2):

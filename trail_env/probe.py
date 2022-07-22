@@ -24,7 +24,7 @@ trail_args = {
     'radius': 100, 
     'diff_rate': 0.01, 
     'reward_dist': 3,
-    'breaks':[(0.6, 0.75)]
+    # 'breaks':[(0.6, 0.75)]
     # 'breaks':[(0.5, 0.99)]
 }
 
@@ -37,7 +37,7 @@ trail_args = {
 
 trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
-model = PPO.load('trained/meander_360_feb22.zip', device='cpu')
+model = PPO.load('trained/osc/0/gen18', device='cpu')
 # model = PPO("CnnPolicy", env, verbose=1,
 #             n_steps=128,
 #             batch_size=256,

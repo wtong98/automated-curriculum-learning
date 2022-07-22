@@ -8,25 +8,24 @@ from collections import namedtuple
 import matplotlib.pyplot as plt
 import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv 
 import torch
 from tqdm import tqdm
 
 from env import TrailEnv
 from curriculum import *
 
-
-def make_model():
+def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
-                n_steps=128,
+                n_steps=512,
                 batch_size=256,
-                ent_coef=8e-6,
-                gamma=0.98,
+                ent_coef=0.01,
+                gamma=0.975,
                 gae_lambda=0.9,
-                clip_range=0.3,
+                clip_range=0.2,  # TODO: try using sched?
                 max_grad_norm=1,
                 vf_coef=0.36,
-                n_epochs=16,
+                n_epochs=10,
                 learning_rate=0.0001,
                 tensorboard_log='log',
                 policy_kwargs={
@@ -36,40 +35,37 @@ def make_model():
                 device='auto'
                 )
 
-def run_session(student, teacher, eval_env):
-    student.learn(total_timesteps=100000, 
-                  log_interval=5,
+def run_session(student, teacher, eval_env, cb_params):
+    student.learn(total_timesteps=500000, 
                   eval_env=eval_env, 
                   eval_freq=512, 
-                  callback=[CurriculumCallback(teacher, eval_env)])
+                  callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
     return teacher.trajectory
 
-Case = namedtuple('Case', ['name', 'teacher', 'params', 'traj'])
+
+Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
 if __name__ == '__main__':
-    n_runs = 5
-    # len_sched = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    len_sched = [10, 20, 30]
+    n_runs = 1
+    len_sched = [10, 20, 30, 40, 50, 60, 70, 80]
+    # len_sched = [10, 20, 30, 40, 50, 60]
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
 
     cases = [
-        Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        Case('Oscillator', OscillatingTeacher, {'len_sched': len_sched}, []),
-        Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
+        # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
+        Case('Oscillator', OscillatingTeacher, {'len_sched': len_sched}, {'save_every': 1, 'save_path': 'trained/osc'}, []),
+        # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
     ]
 
-    for _ in tqdm(range(n_runs)):
+    for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(**case.params)
-            print('TEACHER', teacher)
-            print('SCHED IDX', teacher.sched_idx)
-            model = make_model()
-            print('SCHED IDX 2', teacher.sched_idx)
-            traj = run_session(model, teacher, eval_env)
-            print('SCHED IDX 3', teacher.sched_idx)
+            teacher = case.teacher(**case.teacher_params)
+            model = make_model(env)
+            case.cb_params['save_path'] += f'/{i}'
+            traj = run_session(model, teacher, eval_env, case.cb_params)
             traj = [t[0] for t in traj]
             case.traj.append(traj)
 
@@ -99,7 +95,7 @@ if __name__ == '__main__':
 
     fig.suptitle(f'Trail sched = {len_sched}')
     fig.tight_layout()
-    plt.savefig('fig/tt_trajs.png')
+    plt.savefig('trained/osc/0/tt_trajs.png')
 
 # # <codecell>
 #     lens_inc = [len(traj) for traj in all_trajs_inc]
@@ -136,4 +132,55 @@ if __name__ == '__main__':
 #     fig.tight_layout()
 #     plt.savefig('fig/tt_trajs.png')
 
-# %%
+# %%  SHOWCASE PERFORMANCE IN PLOTS
+# save_path = Path('trained/osc/0')
+# max_gen = 62
+
+# trail_args = {
+#     'length': 80,
+#     'width': 5,
+#     'diff_rate': 0.01,
+#     'radius': 100,
+#     'reward_dist': -1,
+#     'range': (-np.pi / 3, np.pi / 3)
+# }
+
+# for i in tqdm(range(1, max_gen + 1)):
+#     model_path = save_path / f'gen{i}'
+#     # print('loading model')
+#     model = PPO.load(model_path, device='cuda')
+
+#     n_runs = 8
+#     headings = np.linspace(-np.pi / 3, np.pi / 3, num=n_runs)
+
+#     maps = []
+#     position_hists = []
+
+#     # print('preparing to generate headings')
+#     for heading in headings:
+#         trail_map = MeanderTrail(**trail_args, heading=heading)
+#         env = TrailEnv(trail_map, discrete=True, treadmill=True)
+
+#         obs = env.reset()
+#         for _ in range(100):
+#             action, _ = model.predict(obs, deterministic=True)
+#             obs, reward, is_done, _ = env.step(action)
+
+#             if is_done:
+#                 break
+        
+#         # print('gen heading')
+#         maps.append(trail_map)
+#         position_hists.append(env.agent.position_history)
+
+#     fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+
+#     for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
+#         m.plot(ax=ax)
+#         ax.plot(*zip(*position_history), linewidth=2, color='black')
+
+#     fig.suptitle('Sample of agent runs')
+#     fig.tight_layout()
+#     plt.savefig(save_path / f'gen{i}.png')
+#     plt.clf()
+

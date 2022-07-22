@@ -198,6 +198,8 @@ def run_pomcp(n_iters=1500, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
         if is_done:
             break
     
+    del agent.tree
+    del agent
     return traj
 
 
@@ -269,7 +271,7 @@ fig.tight_layout()
 
 
 # %% LONG COMPARISON PLOT
-n_iters = 5
+n_iters = 1
 N = 3
 T = 5
 lr = 0.01
@@ -278,7 +280,8 @@ gamma = 0.95
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-eps = np.arange(-2, 2.1, step=0.5)
+# eps = np.arange(-2, 2.1, step=0.5)
+eps = [0]
 # eps = np.arange(-5, -1, step=0.5)
 # eps = np.arange(-7, -3, step=0.5)
 
@@ -289,10 +292,10 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
-        Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
+        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
         Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),

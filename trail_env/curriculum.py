@@ -6,6 +6,7 @@ author: William Tong (wtong@g.harvard.edu)
 
 from collections import defaultdict
 from itertools import chain, zip_longest
+from pathlib import Path
 import numpy as np
 from scipy.stats import beta
 
@@ -15,11 +16,16 @@ from env import TrailEnv
 from trail_map import MeanderTrail
 
 class CurriculumCallback(BaseCallback):
-    def __init__(self, teacher, eval_env = None, verbose: int = 0, next_lesson_callbacks=None):
+    def __init__(self, teacher, eval_env=None, save_every=0, save_path='trained', verbose=0, next_lesson_callbacks=None):
         super().__init__(verbose=verbose)
         self.eval_env = eval_env
+        self.save_every = save_every
         self.teacher = teacher
         self.next_lesson_callbacks = next_lesson_callbacks or []
+
+        self.save_path = Path(save_path)
+        if not self.save_path.exists():
+            self.save_path.mkdir(parents=True)
 
         self.curr_iter = 0
         self.curr_gen = 0
@@ -51,8 +57,9 @@ class CurriculumCallback(BaseCallback):
             if self.eval_env:
                 self.eval_env.queue_map(self.curr_ckpt['map'])
 
-            # self.model.save(f'gen{self.curr_gen}')
-            # self.curr_gen += 1
+            self.curr_gen += 1
+            if self.save_every > 0 and self.curr_gen % self.save_every == 0:
+                self.model.save(str(self.save_path / f'gen{self.curr_gen}'))
 
         return True
 
@@ -100,7 +107,7 @@ class Teacher:
         self.length_schedule = len_sched if type(len_sched) != type(None) else [10, 20, 30]
         self.sched_idx = 0
 
-        self.n_iters_per_ckpt = 1000
+        self.n_iters_per_ckpt = 2000
         self.n_test_episodes = 25
         self.student = None
         self.eval_env = None
