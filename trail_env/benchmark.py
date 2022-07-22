@@ -134,7 +134,7 @@ if __name__ == '__main__':
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 # save_path = Path('trained/osc/0')
-# max_gen = 62
+# max_gen = 17
 
 # trail_args = {
 #     'length': 80,

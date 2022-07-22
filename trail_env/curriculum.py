@@ -101,7 +101,7 @@ class Teacher:
             'diff_rate': 0.01,
             'radius': 100,
             'reward_dist': -1,
-            'range': (-np.pi / 3, np.pi / 3)
+            'range': (-np.pi, np.pi)
         }
 
         self.length_schedule = len_sched if type(len_sched) != type(None) else [10, 20, 30]
