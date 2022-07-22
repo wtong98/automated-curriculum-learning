@@ -87,7 +87,7 @@ class TeacherUncertainOsc(Agent):
         prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
         return 1 - prob_bad
         
-
+# TODO: try incremental with option to backtrack <--- STOPPED HERE
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr})
     env.reset()

@@ -133,54 +133,54 @@ if __name__ == '__main__':
 #     plt.savefig('fig/tt_trajs.png')
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
-# save_path = Path('trained/osc/0')
-# max_gen = 17
+save_path = Path('trained/osc/0')
+max_gen = 10
 
-# trail_args = {
-#     'length': 80,
-#     'width': 5,
-#     'diff_rate': 0.01,
-#     'radius': 100,
-#     'reward_dist': -1,
-#     'range': (-np.pi / 3, np.pi / 3)
-# }
+trail_args = {
+    'length': 80,
+    'width': 5,
+    'diff_rate': 0.01,
+    'radius': 100,
+    'reward_dist': -1,
+    'range': (-np.pi, np.pi)
+}
 
-# for i in tqdm(range(1, max_gen + 1)):
-#     model_path = save_path / f'gen{i}'
-#     # print('loading model')
-#     model = PPO.load(model_path, device='cuda')
+for i in tqdm(range(1, max_gen + 1)):
+    model_path = save_path / f'gen{i}'
+    # print('loading model')
+    model = PPO.load(model_path, device='cuda')
 
-#     n_runs = 8
-#     headings = np.linspace(-np.pi / 3, np.pi / 3, num=n_runs)
+    n_runs = 8
+    headings = np.linspace(-np.pi, np.pi, num=n_runs)
 
-#     maps = []
-#     position_hists = []
+    maps = []
+    position_hists = []
 
-#     # print('preparing to generate headings')
-#     for heading in headings:
-#         trail_map = MeanderTrail(**trail_args, heading=heading)
-#         env = TrailEnv(trail_map, discrete=True, treadmill=True)
+    # print('preparing to generate headings')
+    for heading in headings:
+        trail_map = MeanderTrail(**trail_args, heading=heading)
+        env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
-#         obs = env.reset()
-#         for _ in range(100):
-#             action, _ = model.predict(obs, deterministic=True)
-#             obs, reward, is_done, _ = env.step(action)
+        obs = env.reset()
+        for _ in range(100):
+            action, _ = model.predict(obs, deterministic=True)
+            obs, reward, is_done, _ = env.step(action)
 
-#             if is_done:
-#                 break
+            if is_done:
+                break
         
-#         # print('gen heading')
-#         maps.append(trail_map)
-#         position_hists.append(env.agent.position_history)
+        # print('gen heading')
+        maps.append(trail_map)
+        position_hists.append(env.agent.position_history)
 
-#     fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+    fig, axs = plt.subplots(2, 4, figsize=(16, 8))
 
-#     for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
-#         m.plot(ax=ax)
-#         ax.plot(*zip(*position_history), linewidth=2, color='black')
+    for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
+        m.plot(ax=ax)
+        ax.plot(*zip(*position_history), linewidth=2, color='black')
 
-#     fig.suptitle('Sample of agent runs')
-#     fig.tight_layout()
-#     plt.savefig(save_path / f'gen{i}.png')
-#     plt.clf()
+    fig.suptitle('Sample of agent runs')
+    fig.tight_layout()
+    plt.savefig(save_path / f'gen{i}.png')
+    plt.clf()
 
