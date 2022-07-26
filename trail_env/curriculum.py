@@ -94,17 +94,10 @@ class ManualTeacher:
 
 
 class Teacher:
-    def __init__(self, len_sched=None):
+    def __init__(self, sched):
         self.trail_class = MeanderTrail
-        self.trail_args = {
-            'width': 5,
-            'diff_rate': 0.01,
-            'radius': 100,
-            'reward_dist': -1,
-            'range': (-np.pi, np.pi)
-        }
 
-        self.length_schedule = len_sched if type(len_sched) != type(None) else [10, 20, 30]
+        self.sched = sched
         self.sched_idx = 0
 
         self.n_iters_per_ckpt = 2000
@@ -146,7 +139,7 @@ class Teacher:
         
         return {
             'iters': self.n_iters_per_ckpt,
-            'map': self.trail_class(length=self.length_schedule[self.sched_idx], **self.trail_args)
+            'map': self.trail_class(**self.sched[self.sched_idx])
         }
 
     def _interleave(self, histories):
@@ -180,7 +173,7 @@ class NaiveTeacher(Teacher):
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
-        self.sched_idx = len(self.length_schedule) - 1
+        self.sched_idx = len(self.sched) - 1
 
         if prob > self.prob_threshold:
             raise StopIteration
@@ -196,7 +189,7 @@ class IncrementalTeacher(Teacher):
 
         if prob > self.prob_threshold:
             self.sched_idx += 1
-            if self.sched_idx == len(self.length_schedule):
+            if self.sched_idx == len(self.sched):
                 raise StopIteration
 
 
@@ -216,7 +209,7 @@ class OscillatingTeacher(Teacher):
         _, prob = self.trajectory[-1]
 
         if self.do_jump(trans):
-            self.curr_idx = min(self.curr_idx + 1, len(self.length_schedule) - 1)
+            self.curr_idx = min(self.curr_idx + 1, len(self.sched) - 1)
             self.sched_idx = self.curr_idx
         elif self.do_dive(trans):
             self.curr_idx = max(self.curr_idx - 1, 0)
@@ -227,7 +220,7 @@ class OscillatingTeacher(Teacher):
             else:
                 self.sched_idx = self.curr_idx
         
-        if self.curr_idx == len(self.length_schedule) - 1 and prob > self.tau:
+        if self.curr_idx == len(self.sched) - 1 and prob > self.tau:
             raise StopIteration
 
     def do_jump(self, trans):
@@ -260,7 +253,7 @@ class RandomTeacher(Teacher):
         self.prob_threshold = 0.9
 
         if target_env == None:
-            target_env = TrailEnv(MeanderTrail(length=self.length_schedule[-1], **self.trail_args))
+            target_env = TrailEnv(MeanderTrail(**self.sched[self.sched_idx]))
         self.target_env = target_env
     
     def _update_sched_idx(self):

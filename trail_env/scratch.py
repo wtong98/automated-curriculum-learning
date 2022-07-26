@@ -23,8 +23,8 @@ class TrackPerformanceCallback:
         t = curriculum_cb.teacher
         scores = []
 
-        for n in t.length_schedule:
-            trail_map = t.trail_class(length=n, **t.trail_args)
+        for s in t.sched:
+            trail_map = t.trail_class(**s)
             test_env = TrailEnv(trail_map)
             scores.append(t._test_student(test_env))
         
