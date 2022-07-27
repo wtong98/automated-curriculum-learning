@@ -21,7 +21,7 @@ L = 10
 gamma = 0.95
 lookahead_cap = 1
 q_reinv_scale = 3   # Should be scaled adaptively?
-q_reinv_prob = 0.25
+q_reinv_prob = 0.2
 
 es = np.ones(N) * -2
 
@@ -30,7 +30,7 @@ qrs_true = []
 agent = TeacherPomcpAgent(goal_length=N, 
                           lookahead_cap=lookahead_cap, 
                           T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, 
-                          n_particles=10000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
+                          n_particles=20000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
 env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 prev_obs = env.reset()

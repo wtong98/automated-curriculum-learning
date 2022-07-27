@@ -198,11 +198,11 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
-def run_pomcp(n_iters=1500, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
+def run_pomcp(n_iters=20000, eps=0, goal_length=3, T=3, gamma=0.95, lr=0.1, max_steps=500):
     agent = TeacherPomcpAgent(goal_length=N, 
                             lookahead_cap=1, 
-                            T=T, bins=10, p_eps=0.05, student_qe=eps, student_lr=lr, gamma=gamma, 
-                            n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0.25)
+                            T=T, bins=10, p_eps=0.1, student_qe=eps, student_lr=lr, gamma=gamma, 
+                            n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0.2)
     env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
     traj = [env.N]
     prev_obs = env.reset()
@@ -226,75 +226,77 @@ def run_pomcp(n_iters=1500, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
     return traj
 
 
-def run_pomcp_with_retry(max_retries=5, **kwargs):
+def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     for i in range(max_retries):
         try:
-            return run_pomcp(**kwargs)
+            return run_pomcp(max_steps=max_steps, **kwargs)
         except Exception as e:
             print('pomcp failure', i+1)
             print(e)
     
+    return [0] * max_steps
+    
 
 # <codecell>
-n_iters = 5
-T = 5
-N = 3
-lr = 0.01
-max_steps = 10000
-bins = 10
-eps = -4
-conf=0.2
+# n_iters = 5
+# T = 5
+# N = 3
+# lr = 0.01
+# max_steps = 10000
+# bins = 10
+# eps = -4
+# conf=0.2
 
-mc_iters = 1000
+# mc_iters = 1000
 
-Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+# Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
-cases = [
-    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
-    # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
-    # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
-    # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
-]
+# cases = [
+#     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+#     Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+#     Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+#     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+#     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+#     # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+#     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
+#     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
+# ]
 
-for _ in tqdm(range(n_iters)):
-    for case in cases:
-        case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
-# %%
-fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+# for _ in tqdm(range(n_iters)):
+#     for case in cases:
+#         case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
+# # %%
+# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
-for i, case in enumerate(cases):
-    label = {'label': case.name}
-    for run in case.runs:
-        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-        label = {}
+# for i, case in enumerate(cases):
+#     label = {'label': case.name}
+#     for run in case.runs:
+#         axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+#         label = {}
 
-axs[0].legend()
-axs[0].set_xlabel('Iteration')
-axs[0].set_ylabel('N')
-axs[0].set_yticks(np.arange(N) + 1)
+# axs[0].legend()
+# axs[0].set_xlabel('Iteration')
+# axs[0].set_ylabel('N')
+# axs[0].set_yticks(np.arange(N) + 1)
 
-axs[0].set_xlim((100, 200))
+# axs[0].set_xlim((100, 200))
 
-all_lens = [[len(run) for run in case.runs] for case in cases]
-all_means = [np.mean(lens) for lens in all_lens]
-all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
-all_names = [case.name for case in cases]
+# all_lens = [[len(run) for run in case.runs] for case in cases]
+# all_means = [np.mean(lens) for lens in all_lens]
+# all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+# all_names = [case.name for case in cases]
 
-axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-axs[1].set_ylabel('Iterations')
+# axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
+# axs[1].set_ylabel('Iterations')
 
-fig.suptitle(f'Epsilon = {eps}')
-fig.tight_layout()
+# fig.suptitle(f'Epsilon = {eps}')
+# fig.tight_layout()
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
-N = 20
+N = 3
 T = 5
 lr = 0.1
 max_steps = 10000
@@ -318,7 +320,7 @@ all_cases = [
         # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
         Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
-        Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr, 'gamma': gamma}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
     ) for e in eps
