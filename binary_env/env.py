@@ -148,10 +148,9 @@ class Agent:
                 state = env.reset()
 
                 if max_rounds != None:
+                    max_rounds -= 1
                     if max_rounds == 0:
                         break
-                    else:
-                        max_rounds -= 1
             else:
                 state = next_state
             
@@ -340,7 +339,7 @@ class TeacherPomcpAgent(Agent):
             print(f'Observed: {obs}')
             self.history += (prev_action, obs,)
 
-            qrs = np.array([qr for _, qr, _ in self.tree[self.history]['b']])
+            qrs = np.array([qr for _, qr in self.tree[self.history]['b']])
             qrs_mean = np.mean(qrs, axis=0)
             qrs_std = np.std(qrs, axis=0)
 
@@ -349,59 +348,89 @@ class TeacherPomcpAgent(Agent):
             self.qrs_stds.append(qrs_std)
             print('N_particles:', len(qrs))
 
-        all_a = []
-        for _ in range(with_replicas):
-            tmp_tree = copy.deepcopy(self.tree)
-            a = self._search()
-            all_a.append(a)
-            self.tree = tmp_tree
-        
         a = self._search()
-        all_a.append(a)
-        self.replicas.append(all_a)
-
         self.curr_n = np.clip(self.curr_n + a - 1, 1, self.goal_length)  # NOTE: assuming agent follows the proposed action
         return a
-
+    
     def _sample_transition(self, state, action):
-        n, qr, success_states = state
-        lookahead_len = self.goal_length
-        if self.lookahead_cap != None:
-            lookahead_len = min(self.curr_n + self.lookahead_cap, self.goal_length)
+        n, qr = state
+        new_n = np.clip(n + action - 1, 1, self.goal_length)
+        for _ in range(self.T):
+            fail_idx = self._sim_fail(new_n, qr)
+            qr = self._update_qr(new_n, qr, fail_idx)
         
-        new_n = np.clip(n + action - 1, 1, lookahead_len)
-
-        qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
-        log_trans_probs = [-np.log(1 + np.exp(-q)) for q in qs]
-        success_prob = np.exp(np.cumsum(log_trans_probs))
-        num_contacts = success_prob * self.T
-
-        diff_qs = np.zeros(self.goal_length)
-        upd_idx = new_n - 1
-        diff_qs[:upd_idx] = (self.student_lr * num_contacts[:-1] \
-            * (np.exp(log_trans_probs[1:]) * (qs[1:] - self.student_qe[1:]) + self.student_qe[:-1] - qs[:-1]))[:upd_idx]
-        diff_qs[upd_idx] = self.student_lr * num_contacts[upd_idx] * (self.student_reward + self.student_qe[upd_idx] - qs[upd_idx])
-        new_qr = qr + diff_qs
-        new_qs = qs + diff_qs
-
-        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
-        obs = self._to_bin(log_prob)
-
         reward = 0
         is_done = False
+        if -np.sum(np.log(self._sig(qr))) < self.p_eps and new_n == self.goal_length:
+            is_done = True
+            reward = 10
 
-        if 1 - np.exp(log_prob) < self.p_eps:
-            if new_n == self.goal_length:
-                reward = self.student_reward
-                is_done = True
-            elif new_n == lookahead_len:
-                reward = 1   # intermediate reward boost at lookahead cap
-                is_done = True
-            elif len(success_states) == 0 or new_n > np.max(success_states):
-                reward = 0   # intermediate reward boost for successful finish
-                success_states = success_states + (new_n,)
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + self.student_qe)[:new_n]])
+        obs = self._to_bin(log_prob)
+        
+        return (new_n, qr), obs, reward, is_done
 
-        return (new_n, new_qr, success_states), obs, reward, is_done
+    def _sim_fail(self, n, qr):
+        for fail_idx, _ in enumerate(qr[:n]):
+            if self._sig(qr[fail_idx] + self.student_qe[fail_idx]) < np.random.random():
+                return fail_idx
+        
+        return n
+
+    def _update_qr(self, n, qr, fail_idx):
+        qr = np.copy(qr)
+        if fail_idx == n:
+            payoff = self.student_reward
+        else:
+            payoff = self._sig(qr[fail_idx] + self.student_qe[fail_idx]) * qr[fail_idx]
+        
+        probs = self._sig(qr[1:fail_idx] + self.student_qe[1:fail_idx])
+        rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
+        qr[:fail_idx] += self.student_lr * rpe
+        return qr
+    
+    def _sig(self, x):
+        return 1 / (1 + np.exp(-np.array(x)))
+
+    # def _sample_transition(self, state, action):
+    #     n, qr, success_states = state
+    #     lookahead_len = self.goal_length
+    #     if self.lookahead_cap != None:
+    #         lookahead_len = min(self.curr_n + self.lookahead_cap, self.goal_length)
+        
+    #     new_n = np.clip(n + action - 1, 1, lookahead_len)
+
+    #     qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
+    #     log_trans_probs = [-np.log(1 + np.exp(-q)) for q in qs]
+    #     success_prob = np.exp(np.cumsum(log_trans_probs))
+    #     num_contacts = success_prob * self.T
+
+    #     diff_qs = np.zeros(self.goal_length)
+    #     upd_idx = new_n - 1
+    #     diff_qs[:upd_idx] = (self.student_lr * num_contacts[:-1] \
+    #         * (np.exp(log_trans_probs[1:]) * (qs[1:] - self.student_qe[1:]) + self.student_qe[:-1] - qs[:-1]))[:upd_idx]
+    #     diff_qs[upd_idx] = self.student_lr * num_contacts[upd_idx] * (self.student_reward + self.student_qe[upd_idx] - qs[upd_idx])
+    #     new_qr = qr + diff_qs
+    #     new_qs = qs + diff_qs
+
+    #     log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
+    #     obs = self._to_bin(log_prob)
+
+    #     reward = 0
+    #     is_done = False
+
+    #     if 1 - np.exp(log_prob) < self.p_eps:
+    #         if new_n == self.goal_length:
+    #             reward = self.student_reward
+    #             is_done = True
+    #         elif new_n == lookahead_len:
+    #             reward = 1   # intermediate reward boost at lookahead cap
+    #             is_done = True
+    #         elif len(success_states) == 0 or new_n > np.max(success_states):
+    #             reward = 0   # intermediate reward boost for successful finish
+    #             success_states = success_states + (new_n,)
+
+    #     return (new_n, new_qr, success_states), obs, reward, is_done
 
     # TODO: copied from teacher
     def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
@@ -414,7 +443,7 @@ class TeacherPomcpAgent(Agent):
 
     def _sample_prior(self):
         qr = np.random.normal(scale=0.1, size=self.goal_length)
-        return (1, qr, ()) 
+        return (1, qr) 
 
     def _sample_rollout_policy(self, history):
         return np.random.choice(self.actions)   # TODO: use something better?
@@ -438,7 +467,7 @@ class TeacherPomcpAgent(Agent):
                 if np.random.random() < self.q_reinv_prob:
                     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
                     samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
-                    state = (samp_state[0], new_qrs, samp_state[2])
+                    state = (samp_state[0], new_qrs)
                 else:
                     state_idx = np.random.choice(len(self.tree[self.history]['b']))
                     state = self.tree[self.history]['b'][state_idx]
@@ -483,7 +512,7 @@ class TeacherPomcpAgent(Agent):
 
             if depth > 0:   # NOTE: avoid re-adding encountered state
                 self.tree[history]['b'].append(state)
-                self.tree[history]['n'] += 1
+            self.tree[history]['n'] += 1
 
             next_node = self.tree[history + (a,)]
             next_node['n'] += 1
@@ -832,7 +861,3 @@ class TeacherPerfectKnowledgeDp(Agent):
     def update(old_state, action, reward, next_state, is_done):
         raise NotImplementedError('Use learn() to train agent directly')
 
-
-
-
-# %%
