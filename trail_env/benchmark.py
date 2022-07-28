@@ -19,7 +19,7 @@ def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=512,
                 batch_size=256,
-                ent_coef=0.01,
+                ent_coef=0.015,
                 gamma=0.975,
                 gae_lambda=0.9,
                 clip_range=0.2,  # TODO: try using sched?
@@ -29,21 +29,23 @@ def make_model(env):
                 learning_rate=0.0001,
                 tensorboard_log='log',
                 policy_kwargs={
-                    'net_arch': [{'pi': [128, 32], 'vf': [128, 32]}],
+                    'net_arch': [{'pi': [128, 128], 'vf': [128, 128]}],
                     'activation_fn': torch.nn.ReLU
                 },
                 device='auto'
                 )
 
 def run_session(student, teacher, eval_env, cb_params):
-    student.learn(total_timesteps=1000000, 
+    student.learn(total_timesteps=1500000, 
                   eval_env=eval_env, 
                   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
     return teacher.trajectory
 
 def make_break_sched(n=8, start_len=80, end_len=160, inc=0.025):
-    pass
+    len_sched = [start_len, end_len] + n * [end_len]
+    break_sched = [[], []] + [[(0.5, 0.5 + i * inc)] for i in range(1, n + 1)]
+    return to_sched(len_sched, break_sched)
 
 def to_sched(len_sched, break_sched):
     trail_args = {
@@ -60,13 +62,28 @@ def to_sched(len_sched, break_sched):
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
-# TODO: try longer timescales, build breaks in at start
 if __name__ == '__main__':
     n_runs = 1
-    # len_sched = [10, 20, 30, 40, 50, 60, 70, 80]
-    len_sched = [80] + 15 * [160]
-    break_sched = [[], [], [(0.5, 0.525)], [(0.5, 0.55)], [(0.5, 0.575)], [(0.5, 0.6)], [(0.5, 0.625)], [(0.5, 0.65)], [(0.5, 0.675)], [(0.5, 0.7)]]
-    sched = to_sched(len_sched, break_sched)
+    # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
+    sched = [
+        (10, [(0.5, 0.6)]),
+        (20, [(0.5, 0.6)]),
+        (30, [(0.5, 0.6)]),
+        (40, [(0.5, 0.6)]),
+        (50, [(0.5, 0.6)]),
+        (60, [(0.5, 0.6)]),
+        (70, [(0.5, 0.6)]),
+        (80, [(0.5, 0.6)]),
+        (90, [(0.5, 0.6)]),
+        (100, [(0.5, 0.6)]),
+        (110, [(0.5, 0.6)]),
+        (120, [(0.5, 0.6)]),
+        (120, [(0.5, 0.625)]),
+        (120, [(0.5, 0.65)]),
+        (120, [(0.5, 0.675)]),
+        (120, [(0.5, 0.7)]),
+    ]
+    sched = to_sched(*zip(*sched))
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
@@ -83,8 +100,8 @@ if __name__ == '__main__':
     for i in tqdm(range(n_runs)):
         for case in cases:
             teacher = case.teacher(**case.teacher_params)
-            # model = make_model(env)
-            model = PPO.load('trained/osc/0/gen1')
+            model = make_model(env)
+            # model = PPO.load('trained/osc/0/gen1')
             model.set_env(env)
             case.cb_params['save_path'] += f'/{i}'
             traj = run_session(model, teacher, eval_env, case.cb_params)
@@ -103,7 +120,7 @@ if __name__ == '__main__':
     axs[0].legend()
     axs[0].set_xlabel('Iteration')
     axs[0].set_ylabel('Schedule index')
-    axs[0].set_yticks(np.arange(len(len_sched)))
+    axs[0].set_yticks(np.arange(len(sched)))
 
     # axs[0].set_xlim((800, 900))
 
@@ -115,9 +132,9 @@ if __name__ == '__main__':
     axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
     axs[1].set_ylabel('Iterations')
 
-    fig.suptitle(f'Trail sched = {len_sched}')
+    fig.suptitle(f'Trail sched')
     fig.tight_layout()
-    plt.savefig('trained/osc/0/tt_trajs.png')
+    plt.savefig('trained/osc_break/0/tt_trajs.png')
 
 # # <codecell>
 #     lens_inc = [len(traj) for traj in all_trajs_inc]
@@ -154,18 +171,20 @@ if __name__ == '__main__':
 #     fig.tight_layout()
 #     plt.savefig('fig/tt_trajs.png')
 
+'''
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 save_path = Path('trained/osc_break/0/')
-max_gen = 10
+max_gen = 24
 
-trail_args = {
-    'length': 80,
-    'width': 5,
-    'diff_rate': 0.01,
-    'radius': 100,
-    'reward_dist': -1,
-    'range': (-np.pi, np.pi)
-}
+# trail_args = {
+#     'length': 80,
+#     'width': 5,
+#     'diff_rate': 0.01,
+#     'radius': 100,
+#     'reward_dist': -1,
+#     'range': (-np.pi, np.pi)
+# }
+trail_args = sched[-1]
 
 for i in tqdm(range(1, max_gen + 1)):
     model_path = save_path / f'gen{i}'
@@ -208,17 +227,18 @@ for i in tqdm(range(1, max_gen + 1)):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/osc/0/gen62')
+model_path = Path('trained/osc_break/0/gen24')
 
-trail_args = {
-    'length': 160,
-    'width': 5,
-    'diff_rate': 0.01,
-    'radius': 100,
-    'reward_dist': -1,
-    'range': (-np.pi, np.pi),
-    'breaks':[(0.5, 0.53)]
-}
+# trail_args = {
+#     'length': 160,
+#     'width': 5,
+#     'diff_rate': 0.01,
+#     'radius': 100,
+#     'reward_dist': -1,
+#     'range': (-np.pi, np.pi),
+#     'breaks':[(0.5, 0.53)]
+# }
+trail_args = sched[-1]
 
 model = PPO.load(model_path, device='cuda')
 
@@ -254,3 +274,4 @@ for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
 fig.suptitle('Sample of agent runs')
 fig.tight_layout()
 plt.savefig('tmp.png')
+'''

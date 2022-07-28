@@ -16,9 +16,9 @@ N = 3
 T = 5
 # student_lr = 0.002
 student_lr = 0.1
-p_eps = 0.1
+p_eps = 0.05
 L = 10
-gamma = 0.95
+gamma = 0.9
 lookahead_cap = 1
 q_reinv_scale = 3   # Should be scaled adaptively?
 q_reinv_prob = 0.2
@@ -30,7 +30,7 @@ qrs_true = []
 agent = TeacherPomcpAgent(goal_length=N, 
                           lookahead_cap=lookahead_cap, 
                           T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, 
-                          n_particles=20000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
+                          n_particles=10000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
 env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 prev_obs = env.reset()
@@ -44,6 +44,7 @@ while not is_done:
 
     state, reward, is_done, _ = env.step(a)
     obs = agent._to_bin(state[1])
+    print('---')
     print(f'Took a: {a}   At n: {env.N}')
 
     assert agent.curr_n == env.N
@@ -77,7 +78,7 @@ axs[1].set_ylabel('# particles')
 fig.suptitle('State estimates of POMCP agent')
 fig.tight_layout()
 
-# plt.savefig('../fig/pomcp_state_estimate.png')
+plt.savefig('../fig/pomcp_state_estimate.png')
 
 # <codecell>
 ### PLOT REPLICAS
@@ -108,7 +109,7 @@ T = 5
 student_lr = 0.1
 p_eps = 0.1
 L = 10
-es = np.ones(N) * -2
+es = np.ones(N) * -1
 lookahead_cap = 1
 
 agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
@@ -177,15 +178,15 @@ T = 5
 student_lr = 0.1
 p_eps = 0.1
 L = 10
-es = np.ones(N) * 0
+es = np.ones(N) * -1
 lookahead_cap = 1
 
 agent = TeacherPomcpAgent(goal_length=N, lookahead_cap=lookahead_cap, T=T, bins=10, p_eps=p_eps, student_qe=es, student_lr=student_lr)
 env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 iters = 1000
-qr_start = [0, 0, 0]
-n_start = 2
+qr_start = [5.58, 4.7, 1]
+n_start = 3
 action = 1
 
 
@@ -217,6 +218,11 @@ print('TRUE_MEANS', true_means)
 
 plt.hist(all_true_qr[:,2], bins=20, alpha=0.7)
 plt.hist(all_pred_qr[:,2], bins=20, alpha=0.7)
+
+qs = all_true_qr + es
+log_p = np.sum(np.log(agent._sig(pred_means + es)))
+# log_p = np.sum([-np.log(1 + np.exp(-q)) for q in (pred_means + agent.student_qe)[:3]])
+agent._to_bin(log_p)
 # %%
 
 pred_qr = agent._update_qr(n_start+1, qr_start[:], fail_idx=3)

@@ -198,10 +198,10 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
-def run_pomcp(n_iters=20000, eps=0, goal_length=3, T=3, gamma=0.95, lr=0.1, max_steps=500):
+def run_pomcp(n_iters=10000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
     agent = TeacherPomcpAgent(goal_length=N, 
                             lookahead_cap=1, 
-                            T=T, bins=10, p_eps=0.1, student_qe=eps, student_lr=lr, gamma=gamma, 
+                            T=T, bins=10, p_eps=0.05, student_qe=eps, student_lr=lr, gamma=gamma, 
                             n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0.2)
     env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
     traj = [env.N]
@@ -299,7 +299,7 @@ n_iters = 5
 N = 3
 T = 5
 lr = 0.1
-max_steps = 10000
+max_steps = 1000
 gamma = 0.95
 conf = 0.2
 bt_conf = 0.2
@@ -355,8 +355,8 @@ offset = np.array([-2, -1, 0, 1, 2])
 # offset = np.array([-1, 0])
 x = np.arange(len(eps))
 # names = ['Incremental', 'Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc', 'Osc (w/ BT)']
-names = ['Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc (w/ BT)']
-# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
+# names = ['Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc (w/ BT)']
+names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']

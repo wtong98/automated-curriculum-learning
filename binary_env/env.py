@@ -361,7 +361,7 @@ class TeacherPomcpAgent(Agent):
         
         reward = 0
         is_done = False
-        if -np.sum(np.log(self._sig(qr))) < self.p_eps and new_n == self.goal_length:
+        if -np.sum(np.log(self._sig(qr + self.student_qe))) < self.p_eps and new_n == self.goal_length:
             is_done = True
             reward = 10
 
@@ -461,18 +461,25 @@ class TeacherPomcpAgent(Agent):
             qrs_mean = np.mean(qrs, axis=0)
             qrs_cov = self.q_reinv_scale * np.cov(qrs, rowvar=False)
 
+            print('ITER WITH HIST', self.history)
+            iters = []
+            vict_iters = []
             for _ in range(self.n_particles):
                 state_idx = np.random.choice(len(self.tree[self.history]['b']))
-                
                 if np.random.random() < self.q_reinv_prob:
                     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
                     samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
                     state = (samp_state[0], new_qrs)
                 else:
-                    state_idx = np.random.choice(len(self.tree[self.history]['b']))
                     state = self.tree[self.history]['b'][state_idx]
 
-                self._simulate(state, self.history, 0)
+                tot_iter, vict_iter = self._simulate(state, self.history, 0)
+                iters.append(tot_iter)
+                vict_iters.append(vict_iter)
+
+            print('MEAN ITERS', np.mean(iters))
+            print('N_ITERS', len(iters))
+            print('PROP VICT', np.mean(vict_iters))
         
         vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
         print('VALS', vals)
@@ -483,7 +490,11 @@ class TeacherPomcpAgent(Agent):
         node_stack = []
         n_visited_stack = []
 
+        tot_iter = 0
+        vict_iter = 0
+
         while self.gamma ** depth > self.eps:
+            tot_iter += 1
             if history not in self.tree:
                 self.tree[history] = self._init_node()
                 for a in self.actions:
@@ -507,8 +518,6 @@ class TeacherPomcpAgent(Agent):
             a = np.argmax(vals)
             next_state, obs, reward, is_done = self._sample_transition(state, a)
             reward_stack.append(reward)
-            if is_done:
-                break
 
             if depth > 0:   # NOTE: avoid re-adding encountered state
                 self.tree[history]['b'].append(state)
@@ -519,6 +528,10 @@ class TeacherPomcpAgent(Agent):
             node_stack.append(next_node)
             n_visited_stack.append(next_node['n'])
 
+            if is_done:
+                vict_iter = 1
+                break
+
             history += (a, obs)
             state = next_state
             depth += 1
@@ -526,6 +539,8 @@ class TeacherPomcpAgent(Agent):
         for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
             total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
             node['v'] += (total_reward - node['v']) / n_visited
+        
+        return tot_iter, vict_iter
 
 
     def _rollout(self, state, history, depth):
