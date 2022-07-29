@@ -18,12 +18,12 @@ T = 5
 student_lr = 0.1
 p_eps = 0.05
 L = 10
-gamma = 0.9
+gamma = 0.99
 lookahead_cap = 1
 q_reinv_scale = 3   # Should be scaled adaptively?
-q_reinv_prob = 0.2
+q_reinv_prob = 0
 
-es = np.ones(N) * -2
+es = np.ones(N) * -5
 
 qrs_true = []
 
@@ -78,7 +78,7 @@ axs[1].set_ylabel('# particles')
 fig.suptitle('State estimates of POMCP agent')
 fig.tight_layout()
 
-plt.savefig('../fig/pomcp_state_estimate.png')
+# plt.savefig('../fig/pomcp_state_estimate.png')
 
 # <codecell>
 ### PLOT REPLICAS

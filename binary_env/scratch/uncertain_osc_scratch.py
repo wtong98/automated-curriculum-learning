@@ -198,11 +198,11 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
-def run_pomcp(n_iters=10000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
+def run_pomcp(n_iters=10000, eps=0, goal_length=3, T=3, gamma=0.98, lr=0.1, max_steps=500):
     agent = TeacherPomcpAgent(goal_length=N, 
                             lookahead_cap=1, 
                             T=T, bins=10, p_eps=0.05, student_qe=eps, student_lr=lr, gamma=gamma, 
-                            n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0.2)
+                            n_particles=n_iters, q_reinv_scale=3, q_reinv_prob=0)
     env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
     traj = [env.N]
     prev_obs = env.reset()
@@ -300,12 +300,12 @@ N = 3
 T = 5
 lr = 0.1
 max_steps = 1000
-gamma = 0.95
+gamma = 0.98
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-eps = np.arange(-2, 2.1, step=0.5)
-# eps = np.arange(-5, -1, step=0.5)
+# eps = np.arange(-2, 2.1, step=0.5)
+eps = np.arange(-4, -1, step=0.5)
 # eps = np.arange(-7, -3, step=0.5)
 
 mc_iters = 1000
@@ -315,10 +315,10 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
         Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
         Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr, 'gamma': gamma}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
@@ -350,13 +350,14 @@ for case_set in cases:
 
 
 width = 0.15
-offset = np.array([-2, -1, 0, 1, 2])
-# offset = np.array([-1, 0, 1])
+# offset = np.array([-2, -1, 0, 1, 2])
+offset = np.array([-1, 0, 1])
 # offset = np.array([-1, 0])
 x = np.arange(len(eps))
 # names = ['Incremental', 'Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc (w/ BT)']
-names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
+# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
+names = ['Incremental (w/ BT)', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
@@ -373,5 +374,5 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/osc_perf_n_{N}.png')
+plt.savefig(f'../fig/osc_perf_low_eps_n_{N}_pomcp.png')
 # %%

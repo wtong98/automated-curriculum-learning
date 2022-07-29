@@ -20,12 +20,11 @@ trail_class = MeanderTrail
 # trail_args = {'width': 3, 'length': 69, 'radius': 100, 'diff_rate': 0.04, 'breaks': [(0.5, 0.8)]}
 trail_args = {
     'width': 5, 
-    'length': 90, 
+    'length': 110, 
     'radius': 100, 
     'diff_rate': 0.01, 
-    'reward_dist': 3,
-    # 'breaks':[(0.6, 0.75)]
-    # 'breaks':[(0.5, 0.99)]
+    'reward_dist': -1,
+    'breaks':[(0.5, 0.6)]
 }
 
 # Straight "meandering" trail
@@ -37,7 +36,7 @@ trail_args = {
 
 trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
-model = PPO.load('trained/osc/0/gen18', device='cpu')
+model = PPO.load('trained/osc_break/0/gen93', device='cpu')
 # model = PPO("CnnPolicy", env, verbose=1,
 #             n_steps=128,
 #             batch_size=256,
@@ -140,7 +139,7 @@ ani.save('fig/agent_movie_obs.gif')
 pi = model.policy
 all_actions = torch.arange(model.action_space.n)
 
-trail_map = trail_class(**trail_args, heading=np.pi/3)
+trail_map = trail_class(**trail_args, heading=-np.pi / 3)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
 
 @torch.no_grad()
@@ -177,7 +176,7 @@ for _ in range(100):
     ax1.imshow(obs)
 
     obs_t, _ = pi.obs_to_tensor(obs)
-    grayscale_cam = cam(input_tensor=obs_t, target_category=None)
+    grayscale_cam = cam(input_tensor=obs_t)
     ax1.imshow(grayscale_cam[0], alpha=0.5, cmap='bone')
 
     ax2 = plt.subplot(122)
@@ -194,5 +193,5 @@ for _ in range(100):
 
 env.map.plot(ax=plt.gca())
 plt.plot(*zip(*env.agent.position_history), linewidth=2, color='black')
-plt.savefig('out.png')
+# plt.savefig('out.png')
 # %%
