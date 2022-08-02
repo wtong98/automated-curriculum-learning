@@ -62,6 +62,7 @@ def to_sched(len_sched, break_sched):
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
+# TODO: try incremental?
 if __name__ == '__main__':
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
@@ -134,7 +135,7 @@ if __name__ == '__main__':
 
     fig.suptitle(f'Trail sched')
     fig.tight_layout()
-    plt.savefig('trained/osc_break/0/tt_trajs.png')
+    plt.savefig('trained/osc_break_adv/0/tt_trajs.png')
 
 # # <codecell>
 #     lens_inc = [len(traj) for traj in all_trajs_inc]
