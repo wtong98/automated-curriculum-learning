@@ -289,7 +289,7 @@ class Teacher(Agent):
 
 class TeacherPomcpAgent(Agent):
     def __init__(self, goal_length, T, bins=10, p_eps=0.05, lookahead_cap=None,
-                       student_qe=0, student_lr=0.01, student_reward=10, 
+                       student_lr=0.01, student_reward=10, 
                        n_particles=500, gamma=0.9, eps=1e-2, 
                        explore_factor=1, q_reinv_scale=1.5, q_reinv_prob=0.25) -> None:
         super().__init__()
@@ -303,11 +303,6 @@ class TeacherPomcpAgent(Agent):
         self.q_reinv_scale = q_reinv_scale
         self.q_reinv_prob = q_reinv_prob
 
-        if isinstance(student_qe, numbers.Number):
-            self.student_qe = np.ones(goal_length) * student_qe
-        else:
-            self.student_qe = student_qe
-
         self.n_particles = n_particles
         self.gamma = gamma
         self.eps = eps
@@ -320,6 +315,8 @@ class TeacherPomcpAgent(Agent):
         self.curr_n = 1
         self.qrs_means = []
         self.qrs_stds = []
+        self.qes_means = []
+        self.qes_stds = []
         self.num_particles = []
         self.replicas = []
     
@@ -334,18 +331,23 @@ class TeacherPomcpAgent(Agent):
         self.curr_n = 1
     
 
-    def next_action(self, prev_action=None, obs=None, with_replicas=0):
+    def next_action(self, prev_action=None, obs=None):
         if obs != None and prev_action != None:
             print(f'Observed: {obs}')
             self.history += (prev_action, obs,)
 
-            qrs = np.array([qr for _, qr in self.tree[self.history]['b']])
+            qs = [(state[1], state[2]) for state in self.tree[self.history]['b']]
+            qrs, qes = zip(*qs)
             qrs_mean = np.mean(qrs, axis=0)
             qrs_std = np.std(qrs, axis=0)
+            qes_mean = np.mean(qes)
+            qes_std = np.std(qes)
 
             self.num_particles.append(len(qrs))
             self.qrs_means.append(qrs_mean)
             self.qrs_stds.append(qrs_std)
+            self.qes_means.append(qes_mean)
+            self.qes_stds.append(qes_std)
             print('N_particles:', len(qrs))
 
         a = self._search()
@@ -353,38 +355,38 @@ class TeacherPomcpAgent(Agent):
         return a
     
     def _sample_transition(self, state, action):
-        n, qr = state
+        n, qr, qe = state
         new_n = np.clip(n + action - 1, 1, self.goal_length)
         for _ in range(self.T):
-            fail_idx = self._sim_fail(new_n, qr)
-            qr = self._update_qr(new_n, qr, fail_idx)
+            fail_idx = self._sim_fail(new_n, qr + qe)
+            qr = self._update_qr(new_n, qr, qe, fail_idx)
         
         reward = 0
         is_done = False
-        if -np.sum(np.log(self._sig(qr + self.student_qe))) < self.p_eps and new_n == self.goal_length:
+        if -np.sum(np.log(self._sig(qr + qe))) < self.p_eps and new_n == self.goal_length:
             is_done = True
             reward = 10
 
-        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + self.student_qe)[:new_n]])
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + qe)[:new_n]])
         obs = self._to_bin(log_prob)
         
-        return (new_n, qr), obs, reward, is_done
+        return (new_n, qr, qe), obs, reward, is_done
 
-    def _sim_fail(self, n, qr):
-        for fail_idx, _ in enumerate(qr[:n]):
-            if self._sig(qr[fail_idx] + self.student_qe[fail_idx]) < np.random.random():
+    def _sim_fail(self, n, qs):
+        for fail_idx, q in enumerate(qs[:n]):
+            if self._sig(q) < np.random.random():
                 return fail_idx
         
         return n
 
-    def _update_qr(self, n, qr, fail_idx):
+    def _update_qr(self, n, qr, qe, fail_idx):
         qr = np.copy(qr)
         if fail_idx == n:
             payoff = self.student_reward
         else:
-            payoff = self._sig(qr[fail_idx] + self.student_qe[fail_idx]) * qr[fail_idx]
+            payoff = self._sig(qr[fail_idx] + qe) * qr[fail_idx]
         
-        probs = self._sig(qr[1:fail_idx] + self.student_qe[1:fail_idx])
+        probs = self._sig(qr[1:fail_idx] + qe)
         rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
         qr[:fail_idx] += self.student_lr * rpe
         return qr
@@ -392,47 +394,6 @@ class TeacherPomcpAgent(Agent):
     def _sig(self, x):
         return 1 / (1 + np.exp(-np.array(x)))
 
-    # def _sample_transition(self, state, action):
-    #     n, qr, success_states = state
-    #     lookahead_len = self.goal_length
-    #     if self.lookahead_cap != None:
-    #         lookahead_len = min(self.curr_n + self.lookahead_cap, self.goal_length)
-        
-    #     new_n = np.clip(n + action - 1, 1, lookahead_len)
-
-    #     qs = [self.student_qe[s] + qr[s] for s in range(self.goal_length)]
-    #     log_trans_probs = [-np.log(1 + np.exp(-q)) for q in qs]
-    #     success_prob = np.exp(np.cumsum(log_trans_probs))
-    #     num_contacts = success_prob * self.T
-
-    #     diff_qs = np.zeros(self.goal_length)
-    #     upd_idx = new_n - 1
-    #     diff_qs[:upd_idx] = (self.student_lr * num_contacts[:-1] \
-    #         * (np.exp(log_trans_probs[1:]) * (qs[1:] - self.student_qe[1:]) + self.student_qe[:-1] - qs[:-1]))[:upd_idx]
-    #     diff_qs[upd_idx] = self.student_lr * num_contacts[upd_idx] * (self.student_reward + self.student_qe[upd_idx] - qs[upd_idx])
-    #     new_qr = qr + diff_qs
-    #     new_qs = qs + diff_qs
-
-    #     log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in new_qs[:new_n]])
-    #     obs = self._to_bin(log_prob)
-
-    #     reward = 0
-    #     is_done = False
-
-    #     if 1 - np.exp(log_prob) < self.p_eps:
-    #         if new_n == self.goal_length:
-    #             reward = self.student_reward
-    #             is_done = True
-    #         elif new_n == lookahead_len:
-    #             reward = 1   # intermediate reward boost at lookahead cap
-    #             is_done = True
-    #         elif len(success_states) == 0 or new_n > np.max(success_states):
-    #             reward = 0   # intermediate reward boost for successful finish
-    #             success_states = success_states + (new_n,)
-
-    #     return (new_n, new_qr, success_states), obs, reward, is_done
-
-    # TODO: copied from teacher
     def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
         logit = log_p - np.log(1 - np.exp(log_p) + eps)
 
@@ -442,8 +403,9 @@ class TeacherPomcpAgent(Agent):
         return bin_p
 
     def _sample_prior(self):
-        qr = np.random.normal(scale=0.1, size=self.goal_length)
-        return (1, qr) 
+        qr = np.zeros(self.goal_length)
+        qe = np.random.uniform(-5, 5)
+        return (1, qr, qe) 
 
     def _sample_rollout_policy(self, history):
         return np.random.choice(self.actions)   # TODO: use something better?
@@ -457,21 +419,24 @@ class TeacherPomcpAgent(Agent):
                 state = self._sample_prior()
                 self._simulate(state, self.history, 0)
         else:
-            qrs = [state[1] for state in self.tree[self.history]['b']]
-            qrs_mean = np.mean(qrs, axis=0)
-            qrs_cov = self.q_reinv_scale * np.cov(qrs, rowvar=False)
+            # qrs = [state[1] for state in self.tree[self.history]['b']]
+            # qrs_mean = np.mean(qrs, axis=0)
+            # qrs_cov = self.q_reinv_scale * np.cov(qrs, rowvar=False)
 
             print('ITER WITH HIST', self.history)
             iters = []
             vict_iters = []
             for _ in range(self.n_particles):
                 state_idx = np.random.choice(len(self.tree[self.history]['b']))
-                if np.random.random() < self.q_reinv_prob:
-                    new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
-                    samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
-                    state = (samp_state[0], new_qrs)
-                else:
-                    state = self.tree[self.history]['b'][state_idx]
+                state = self.tree[self.history]['b'][state_idx]
+
+                # TODO: rethink reinvig strategy (jitter eps?)
+                # if np.random.random() < self.q_reinv_prob:
+                #     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
+                #     samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
+                #     state = (samp_state[0], new_qrs)
+                # else:
+                #     state = self.tree[self.history]['b'][state_idx]
 
                 tot_iter, vict_iter = self._simulate(state, self.history, 0)
                 iters.append(tot_iter)

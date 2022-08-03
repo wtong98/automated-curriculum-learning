@@ -17,7 +17,7 @@ from curriculum import *
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
-                n_steps=512,
+                n_steps=1024,
                 batch_size=256,
                 ent_coef=0.1,
                 gamma=0.98,
@@ -50,8 +50,8 @@ def make_break_sched(n=8, start_len=80, end_len=160, inc=0.025):
 def to_sched(len_sched, break_sched):
     trail_args = {
         'width': 5,
-        'diff_rate': 0.01,
-        'radius': 100,
+        'diff_rate': 0.02,
+        'radius': 70,
         'reward_dist': -1,
         'range': (-np.pi, np.pi)
     }
@@ -67,22 +67,22 @@ if __name__ == '__main__':
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
-        # (10, [(0.5, 0.6)]),
-        # (20, [(0.5, 0.6)]),
-        # (30, [(0.5, 0.6)]),
-        # (40, [(0.5, 0.6)]),
-        # (50, [(0.5, 0.6)]),
-        # (60, [(0.5, 0.6)]),
-        # (70, [(0.5, 0.6)]),
-        # (80, [(0.5, 0.6)]),
+        (10, [(0.5, 0.6)]),
+        (20, [(0.5, 0.6)]),
+        (30, [(0.5, 0.6)]),
+        (40, [(0.5, 0.6)]),
+        (50, [(0.5, 0.6)]),
+        (60, [(0.5, 0.6)]),
+        (70, [(0.5, 0.6)]),
+        (80, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
-        # (100, [(0.5, 0.6)]),
-        # (110, [(0.5, 0.6)]),
-        # (120, [(0.5, 0.6)]),
-        # (120, [(0.5, 0.625)]),
-        # (120, [(0.5, 0.65)]),
-        # (120, [(0.5, 0.675)]),
-        # (120, [(0.5, 0.7)]),
+        (100, [(0.5, 0.6)]),
+        (110, [(0.5, 0.6)]),
+        (120, [(0.5, 0.6)]),
+        (120, [(0.5, 0.625)]),
+        (120, [(0.5, 0.65)]),
+        (120, [(0.5, 0.675)]),
+        (120, [(0.5, 0.7)]),
     ]
     sched = to_sched(*zip(*sched))
 
@@ -92,17 +92,18 @@ if __name__ == '__main__':
     
     print('SCHED', sched)
 
+    # TODO: should've jumped by now?
     cases = [
         # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        Case('Oscillator', OscillatingTeacher, {'sched': sched}, {'save_every': 1, 'save_path': 'trained/osc_break_adv'}, []),
+        Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.8}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
         # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
             teacher = case.teacher(**case.teacher_params)
-            # model = make_model(env)
-            model = PPO.load('trained/osc_break/0/gen93')
+            model = make_model(env)
+            # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
             case.cb_params['save_path'] += f'/{i}'
             traj = run_session(model, teacher, eval_env, case.cb_params)
@@ -135,7 +136,7 @@ if __name__ == '__main__':
 
     fig.suptitle(f'Trail sched')
     fig.tight_layout()
-    plt.savefig('trained/osc_break_adv/0/tt_trajs.png')
+    plt.savefig('trained/osc_break_ii/0/tt_trajs.png')
 
 # # <codecell>
 #     lens_inc = [len(traj) for traj in all_trajs_inc]
@@ -227,51 +228,51 @@ if __name__ == '__main__':
 
 
 # <codecell> SINGLE PROBE
-# model_path = Path('trained/osc_break/0/gen93')
+model_path = Path('trained/osc_break_ii/0/gen94')
 
-# # trail_args = {
-# #     'length': 160,
-# #     'width': 5,
-# #     'diff_rate': 0.01,
-# #     'radius': 100,
-# #     'reward_dist': -1,
-# #     'range': (-np.pi, np.pi),
-# #     'breaks':[(0.5, 0.53)]
-# # }
-# trail_args = sched[-1]
+# trail_args = {
+#     'length': 160,
+#     'width': 5,
+#     'diff_rate': 0.01,
+#     'radius': 100,
+#     'reward_dist': -1,
+#     'range': (-np.pi, np.pi),
+#     'breaks':[(0.5, 0.53)]
+# }
+trail_args = sched[10]
 
-# model = PPO.load(model_path, device='cuda')
+model = PPO.load(model_path, device='cuda')
 
-# n_runs = 8
-# headings = np.linspace(-np.pi, np.pi, num=n_runs)
+n_runs = 8
+headings = np.linspace(-np.pi, np.pi, num=n_runs)
 
-# maps = []
-# position_hists = []
+maps = []
+position_hists = []
 
-# # print('preparing to generate headings')
-# for heading in headings:
-#     trail_map = MeanderTrail(**trail_args, heading=heading)
-#     env = TrailEnv(trail_map, discrete=True, treadmill=True)
+# print('preparing to generate headings')
+for heading in headings:
+    trail_map = MeanderTrail(**trail_args, heading=heading)
+    env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
-#     obs = env.reset()
-#     for _ in range(100):
-#         action, _ = model.predict(obs, deterministic=True)
-#         obs, reward, is_done, _ = env.step(action)
+    obs = env.reset()
+    for _ in range(100):
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, is_done, _ = env.step(action)
 
-#         if is_done:
-#             break
+        if is_done:
+            break
     
-#     # print('gen heading')
-#     maps.append(trail_map)
-#     position_hists.append(env.agent.position_history)
+    # print('gen heading')
+    maps.append(trail_map)
+    position_hists.append(env.agent.position_history)
 
-# fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+fig, axs = plt.subplots(2, 4, figsize=(16, 8))
 
-# for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
-#     m.plot(ax=ax)
-#     ax.plot(*zip(*position_history), linewidth=2, color='black')
+for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
+    m.plot(ax=ax)
+    ax.plot(*zip(*position_history), linewidth=2, color='black')
 
-# fig.suptitle('Sample of agent runs')
-# fig.tight_layout()
-# plt.savefig('tmp.png')
+fig.suptitle('Sample of agent runs')
+fig.tight_layout()
+plt.savefig('tmp.png')
 # %%

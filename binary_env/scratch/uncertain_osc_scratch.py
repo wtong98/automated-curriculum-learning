@@ -300,12 +300,12 @@ N = 3
 T = 5
 lr = 0.1
 max_steps = 1000
-gamma = 0.98
+gamma = 0.9
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-# eps = np.arange(-2, 2.1, step=0.5)
-eps = np.arange(-4, -1, step=0.5)
+eps = np.arange(-2, 2.1, step=0.5)
+# eps = np.arange(-4, -1, step=0.5)
 # eps = np.arange(-7, -3, step=0.5)
 
 mc_iters = 1000
@@ -315,10 +315,10 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
         Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
         Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr, 'gamma': gamma}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
@@ -350,14 +350,14 @@ for case_set in cases:
 
 
 width = 0.15
-# offset = np.array([-2, -1, 0, 1, 2])
-offset = np.array([-1, 0, 1])
+offset = np.array([-2, -1, 0, 1, 2])
+# offset = np.array([-1, 0, 1])
 # offset = np.array([-1, 0])
 x = np.arange(len(eps))
 # names = ['Incremental', 'Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc (w/ BT)']
-# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
-names = ['Incremental (w/ BT)', 'Osc (w/ BT)', 'POMCP']
+names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
+# names = ['Incremental (w/ BT)', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
@@ -374,5 +374,5 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/osc_perf_low_eps_n_{N}_pomcp.png')
+plt.savefig(f'../fig/osc_perf_n_{N}_pomcp_qe_est.png')
 # %%

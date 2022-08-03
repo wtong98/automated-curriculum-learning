@@ -18,18 +18,18 @@ T = 5
 student_lr = 0.1
 p_eps = 0.05
 L = 10
-gamma = 0.99
+gamma = 0.9
 lookahead_cap = 1
 q_reinv_scale = 3   # Should be scaled adaptively?
 q_reinv_prob = 0
 
-es = np.ones(N) * -5
+es = np.ones(N) * -2
 
 qrs_true = []
 
 agent = TeacherPomcpAgent(goal_length=N, 
                           lookahead_cap=lookahead_cap, 
-                          T=T, bins=L, p_eps=p_eps, student_qe=es, student_lr=student_lr, gamma=gamma, 
+                          T=T, bins=L, p_eps=p_eps, student_lr=student_lr, gamma=gamma, 
                           n_particles=10000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
 env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
@@ -38,9 +38,8 @@ prev_a = None
 is_done = False
 
 
-# TODO: q estimates seem to be way off
 while not is_done:
-    a = agent.next_action(prev_a, prev_obs, with_replicas=0)
+    a = agent.next_action(prev_a, prev_obs)
 
     state, reward, is_done, _ = env.step(a)
     obs = agent._to_bin(state[1])
@@ -53,7 +52,6 @@ while not is_done:
     prev_a = a
     prev_obs = obs
 
-# qrs_true = qrs_true[1:]
 print('Great success!')
 
 # <codecell>
@@ -66,6 +64,9 @@ for i in range(N):
     axs[0].errorbar(steps, [q[i] for q in agent.qrs_means], yerr=[2 * s[i] for s in agent.qrs_stds], color=f'C{i}', alpha=0.5, fmt='o', markersize=0)
     axs[0].plot(steps, [q[i] for q in qrs_true[:-1]], label=f'qr[{i}]', color=f'C{i}', alpha=0.8)
 
+axs[0].errorbar(steps + 0.02, agent.qes_means, yerr=[2 * s for s in agent.qes_stds], color=f'black', alpha=0.5, fmt='o', markersize=0)
+axs[0].plot(steps, [es[0]] * len(steps), label=f'eps', color=f'black', alpha=0.8)
+
 
 axs[0].legend()
 axs[0].set_xlabel('Step')
@@ -75,10 +76,10 @@ axs[1].bar(steps, agent.num_particles)
 axs[1].set_xlabel('Step')
 axs[1].set_ylabel('# particles')
 
-fig.suptitle('State estimates of POMCP agent')
+fig.suptitle(f'State estimates of POMCP agent (eps = {es[0]})')
 fig.tight_layout()
 
-# plt.savefig('../fig/pomcp_state_estimate.png')
+plt.savefig('../fig/pomcp_state_estimate.png')
 
 # <codecell>
 ### PLOT REPLICAS

@@ -342,7 +342,7 @@ class BrokenMeanderTrail(MeanderTrail):
 
 if __name__ == '__main__':
     # trail = MeanderTrail(width=10, radius=70, diff_rate=0.05, length=65)
-    trail = MeanderTrail(width=10, radius=80, diff_rate=0.01, length=100, breaks=[(0.6, 0.8)], reward_dist=5)
+    trail = MeanderTrail(width=10, radius=50, diff_rate=0.03, length=100, breaks=[(0.6, 0.8)], reward_dist=-1)
     # trail = BrokenMeanderTrail(exp_breaks=1, exp_len=10, trail_length=100, diff_rate=0.01)
     trail.plot()
     plt.savefig('fig/meander_trail.png')
