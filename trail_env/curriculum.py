@@ -194,13 +194,13 @@ class IncrementalTeacher(Teacher):
 
 
 class OscillatingTeacher(Teacher):
-    def __init__(self, tau=0.95, conf=0.2, max_m_factor=3, **teacher_kwargs):
+    def __init__(self, tau=0.95, conf=0.2, min_m_abs=5, max_m_factor=3, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.tau = tau
         self.conf = conf
 
         raw_min_m = np.log(1 - conf) / np.log(tau) - 1
-        self.min_m = int(np.floor(raw_min_m))
+        self.min_m = max(int(np.floor(raw_min_m)), min_m_abs)
         self.max_m = int(self.min_m * max_m_factor)
         self.curr_idx = 0
     

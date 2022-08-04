@@ -17,7 +17,7 @@ from curriculum import *
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
-                n_steps=1024,
+                n_steps=2048,
                 batch_size=256,
                 ent_coef=0.1,
                 gamma=0.98,
@@ -25,7 +25,7 @@ def make_model(env):
                 clip_range=0.2,  # TODO: try using sched?
                 max_grad_norm=1,
                 vf_coef=0.36,
-                n_epochs=10,
+                n_epochs=5,
                 learning_rate=0.0001,
                 tensorboard_log='log',
                 policy_kwargs={
@@ -36,7 +36,7 @@ def make_model(env):
                 )
 
 def run_session(student, teacher, eval_env, cb_params):
-    student.learn(total_timesteps=1500000, 
+    student.learn(total_timesteps=3000000, 
                   eval_env=eval_env, 
                   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
@@ -62,7 +62,7 @@ def to_sched(len_sched, break_sched):
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
-# TODO: try incremental?
+# TODO: try interleaving increment of break with increment of length
 if __name__ == '__main__':
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     # TODO: should've jumped by now?
     cases = [
         # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.8}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
+        Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
         # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
     ]
 
@@ -228,51 +228,51 @@ if __name__ == '__main__':
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/osc_break_ii/0/gen94')
+# model_path = Path('trained/osc_break_ii/0/gen94')
 
-# trail_args = {
-#     'length': 160,
-#     'width': 5,
-#     'diff_rate': 0.01,
-#     'radius': 100,
-#     'reward_dist': -1,
-#     'range': (-np.pi, np.pi),
-#     'breaks':[(0.5, 0.53)]
-# }
-trail_args = sched[10]
+# # trail_args = {
+# #     'length': 160,
+# #     'width': 5,
+# #     'diff_rate': 0.01,
+# #     'radius': 100,
+# #     'reward_dist': -1,
+# #     'range': (-np.pi, np.pi),
+# #     'breaks':[(0.5, 0.53)]
+# # }
+# trail_args = sched[11]
 
-model = PPO.load(model_path, device='cuda')
+# model = PPO.load(model_path, device='cuda')
 
-n_runs = 8
-headings = np.linspace(-np.pi, np.pi, num=n_runs)
+# n_runs = 8
+# headings = np.linspace(-np.pi, np.pi, num=n_runs)
 
-maps = []
-position_hists = []
+# maps = []
+# position_hists = []
 
-# print('preparing to generate headings')
-for heading in headings:
-    trail_map = MeanderTrail(**trail_args, heading=heading)
-    env = TrailEnv(trail_map, discrete=True, treadmill=True)
+# # print('preparing to generate headings')
+# for heading in headings:
+#     trail_map = MeanderTrail(**trail_args, heading=heading)
+#     env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
-    obs = env.reset()
-    for _ in range(100):
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, is_done, _ = env.step(action)
+#     obs = env.reset()
+#     for _ in range(100):
+#         action, _ = model.predict(obs, deterministic=True)
+#         obs, reward, is_done, _ = env.step(action)
 
-        if is_done:
-            break
+#         if is_done:
+#             break
     
-    # print('gen heading')
-    maps.append(trail_map)
-    position_hists.append(env.agent.position_history)
+#     # print('gen heading')
+#     maps.append(trail_map)
+#     position_hists.append(env.agent.position_history)
 
-fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+# fig, axs = plt.subplots(2, 4, figsize=(16, 8))
 
-for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
-    m.plot(ax=ax)
-    ax.plot(*zip(*position_history), linewidth=2, color='black')
+# for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
+#     m.plot(ax=ax)
+#     ax.plot(*zip(*position_history), linewidth=2, color='black')
 
-fig.suptitle('Sample of agent runs')
-fig.tight_layout()
-plt.savefig('tmp.png')
+# fig.suptitle('Sample of agent runs')
+# fig.tight_layout()
+# plt.savefig('tmp.png')
 # %%

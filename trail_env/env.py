@@ -21,7 +21,7 @@ class TrailEnv(gym.Env):
     heading_bound = np.pi
     max_speed = 3
     view_distance = 40
-    max_steps = 100
+    max_steps = 200
     max_off_trail_steps = np.inf
     observation_scale = 2
     y_adjust = 0.3
