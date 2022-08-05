@@ -374,5 +374,5 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/osc_perf_n_low_eps_{N}_pomcp_qe_est.png')
+plt.savefig(f'../fig/osc_perf_n_{N}_low_eps_pomcp_qe_est.png')
 # %%
