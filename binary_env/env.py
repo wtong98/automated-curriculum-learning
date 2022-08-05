@@ -408,7 +408,23 @@ class TeacherPomcpAgent(Agent):
         return (1, qr, qe) 
 
     def _sample_rollout_policy(self, history):
-        return np.random.choice(self.actions)   # TODO: use something better?
+        return np.random.choice(self.actions)
+    
+    def _sample_inc_policy(self, state):
+        n, qr, qe = state
+        total_log_prob = 0
+        for i, q in enumerate(qr + qe):
+            total_log_prob += np.log(self._sig(q))
+            if total_log_prob < -self.p_eps:
+                break
+        
+        if i + 1 < n:
+            return 0
+        elif i + 1 > n:
+            return 2
+        else:
+            return 1
+
     
     def _init_node(self):
         return {'v': 0, 'n': 0, 'b': []}
@@ -513,7 +529,8 @@ class TeacherPomcpAgent(Agent):
         total_reward = 0
 
         while self.gamma ** depth > self.eps:
-            a = self._sample_rollout_policy(history)
+            # a = self._sample_rollout_policy(history)
+            a = self._sample_inc_policy(state)
             state, obs, reward, is_done = self._sample_transition(state, a)
 
             history += (a, obs)
