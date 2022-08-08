@@ -19,7 +19,7 @@ def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=2048,
                 batch_size=256,
-                ent_coef=0.1,
+                ent_coef=0.15,
                 gamma=0.98,
                 gae_lambda=0.9,
                 clip_range=0.2,  # TODO: try using sched?
@@ -62,6 +62,7 @@ def to_sched(len_sched, break_sched):
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
+
 # TODO: try interleaving increment of break with increment of length
 if __name__ == '__main__':
     n_runs = 1
@@ -83,13 +84,15 @@ if __name__ == '__main__':
         (100, [(0.5, 0.6)]),
         (110, [(0.5, 0.6)]),
         (120, [(0.5, 0.6)]),
-        (120, [(0.5, 0.612)]),
-        (120, [(0.5, 0.625)]),
-        (120, [(0.5, 0.637)]),
+        (120, [(0.5, 0.61)]),
+        (120, [(0.5, 0.62)]),
+        (120, [(0.5, 0.63)]),
+        (120, [(0.5, 0.64)]),
         (120, [(0.5, 0.65)]),
-        (120, [(0.5, 0.662)]),
-        (120, [(0.5, 0.675)]),
-        (120, [(0.5, 0.687)]),
+        (120, [(0.5, 0.66)]),
+        (120, [(0.5, 0.67)]),
+        (120, [(0.5, 0.68)]),
+        (120, [(0.5, 0.69)]),
         (120, [(0.5, 0.7)]),
     ]
     sched = to_sched(*zip(*sched))
@@ -236,7 +239,7 @@ if __name__ == '__main__':
 
 
 # <codecell> SINGLE PROBE
-# model_path = Path('trained/osc_break_ii/0/gen94')
+# model_path = Path('trained/remote/gen186')
 
 # # trail_args = {
 # #     'length': 160,
@@ -247,7 +250,7 @@ if __name__ == '__main__':
 # #     'range': (-np.pi, np.pi),
 # #     'breaks':[(0.5, 0.53)]
 # # }
-# trail_args = sched[11]
+# trail_args = sched[-5]
 
 # model = PPO.load(model_path, device='cuda')
 
@@ -263,7 +266,7 @@ if __name__ == '__main__':
 #     env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
 #     obs = env.reset()
-#     for _ in range(100):
+#     for _ in range(200):
 #         action, _ = model.predict(obs, deterministic=True)
 #         obs, reward, is_done, _ = env.step(action)
 
