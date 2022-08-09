@@ -23,14 +23,14 @@ lookahead_cap = 1
 q_reinv_scale = 3   # Should be scaled adaptively?
 q_reinv_prob = 0
 
-es = np.ones(N) * -4
+es = np.ones(N) * -2
 
 qrs_true = []
 
 agent = TeacherPomcpAgent(goal_length=N, 
                           lookahead_cap=lookahead_cap, 
-                          T=T, bins=L, p_eps=p_eps, student_lr=student_lr, gamma=gamma, 
-                          n_particles=10000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
+                          T=T, bins=L, p_eps=p_eps, gamma=gamma, 
+                          n_particles=1000, q_reinv_scale=q_reinv_scale, q_reinv_prob=q_reinv_prob)
 env = CurriculumEnv(goal_length=N, train_iter=999, train_round=T, p_eps=p_eps, teacher_reward=10, student_reward=10, student_qe_dist=es, student_params={'lr': student_lr})
 
 prev_obs = env.reset()
@@ -66,6 +66,9 @@ for i in range(N):
 
 axs[0].errorbar(steps + 0.02, agent.qes_means, yerr=[2 * s for s in agent.qes_stds], color=f'black', alpha=0.5, fmt='o', markersize=0)
 axs[0].plot(steps, [es[0]] * len(steps), label=f'eps', color=f'black', alpha=0.8)
+
+axs[0].errorbar(steps - 0.02, agent.lr_means, yerr=[2 * s for s in agent.lr_stds], color=f'gray', alpha=0.5, fmt='o', markersize=0)
+axs[0].plot(steps, [student_lr] * len(steps), label=f'eps', color=f'gray', alpha=0.8)
 
 
 axs[0].legend()

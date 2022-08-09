@@ -289,7 +289,7 @@ class Teacher(Agent):
 
 class TeacherPomcpAgent(Agent):
     def __init__(self, goal_length, T, bins=10, p_eps=0.05, lookahead_cap=None,
-                       student_lr=0.01, student_reward=10, 
+                       student_reward=10, 
                        n_particles=500, gamma=0.9, eps=1e-2, 
                        explore_factor=1, q_reinv_scale=1.5, q_reinv_prob=0.25) -> None:
         super().__init__()
@@ -298,7 +298,6 @@ class TeacherPomcpAgent(Agent):
         self.bins = bins
         self.p_eps = p_eps
         self.lookahead_cap = lookahead_cap
-        self.student_lr = student_lr
         self.student_reward = student_reward
         self.q_reinv_scale = q_reinv_scale
         self.q_reinv_prob = q_reinv_prob
@@ -317,6 +316,8 @@ class TeacherPomcpAgent(Agent):
         self.qrs_stds = []
         self.qes_means = []
         self.qes_stds = []
+        self.lr_means = []
+        self.lr_stds = []
         self.num_particles = []
         self.replicas = []
     
@@ -336,18 +337,22 @@ class TeacherPomcpAgent(Agent):
             print(f'Observed: {obs}')
             self.history += (prev_action, obs,)
 
-            qs = [(state[1], state[2]) for state in self.tree[self.history]['b']]
-            qrs, qes = zip(*qs)
+            qs = [(state[1], state[2], state[3]) for state in self.tree[self.history]['b']]
+            qrs, qes, lrs = zip(*qs)
             qrs_mean = np.mean(qrs, axis=0)
             qrs_std = np.std(qrs, axis=0)
             qes_mean = np.mean(qes)
             qes_std = np.std(qes)
+            lr_mean = np.mean(lrs)
+            lr_std = np.std(lrs)
 
             self.num_particles.append(len(qrs))
             self.qrs_means.append(qrs_mean)
             self.qrs_stds.append(qrs_std)
             self.qes_means.append(qes_mean)
             self.qes_stds.append(qes_std)
+            self.lr_means.append(lr_mean)
+            self.lr_stds.append(lr_std)
             print('N_particles:', len(qrs))
 
         a = self._search()
@@ -355,11 +360,11 @@ class TeacherPomcpAgent(Agent):
         return a
     
     def _sample_transition(self, state, action):
-        n, qr, qe = state
+        n, qr, qe, lr = state
         new_n = np.clip(n + action - 1, 1, self.goal_length)
         for _ in range(self.T):
             fail_idx = self._sim_fail(new_n, qr + qe)
-            qr = self._update_qr(new_n, qr, qe, fail_idx)
+            qr = self._update_qr(new_n, qr, qe, lr, fail_idx)
         
         reward = 0
         is_done = False
@@ -370,7 +375,7 @@ class TeacherPomcpAgent(Agent):
         log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + qe)[:new_n]])
         obs = self._to_bin(log_prob)
         
-        return (new_n, qr, qe), obs, reward, is_done
+        return (new_n, qr, qe, lr), obs, reward, is_done
 
     def _sim_fail(self, n, qs):
         for fail_idx, q in enumerate(qs[:n]):
@@ -379,7 +384,7 @@ class TeacherPomcpAgent(Agent):
         
         return n
 
-    def _update_qr(self, n, qr, qe, fail_idx):
+    def _update_qr(self, n, qr, qe, lr, fail_idx):
         qr = np.copy(qr)
         if fail_idx == n:
             payoff = self.student_reward
@@ -388,7 +393,7 @@ class TeacherPomcpAgent(Agent):
         
         probs = self._sig(qr[1:fail_idx] + qe)
         rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
-        qr[:fail_idx] += self.student_lr * rpe
+        qr[:fail_idx] += lr * rpe
         return qr
     
     def _sig(self, x):
@@ -405,13 +410,14 @@ class TeacherPomcpAgent(Agent):
     def _sample_prior(self):
         qr = np.zeros(self.goal_length)
         qe = np.random.uniform(-5, 5)
-        return (1, qr, qe) 
+        lr = np.random.uniform(0, 1)
+        return (1, qr, qe, lr) 
 
     def _sample_rollout_policy(self, history):
         return np.random.choice(self.actions)
     
     def _sample_inc_policy(self, state):
-        n, qr, qe = state
+        n, qr, qe = state[:3]
         total_log_prob = 0
         for i, q in enumerate(qr + qe):
             total_log_prob += np.log(self._sig(q))
@@ -460,7 +466,7 @@ class TeacherPomcpAgent(Agent):
 
             print('MEAN ITERS', np.mean(iters))
             print('N_ITERS', len(iters))
-            print('PROP VICT', np.mean(vict_iters))
+            # print('PROP VICT', np.mean(vict_iters))
         
         vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
         print('VALS', vals)

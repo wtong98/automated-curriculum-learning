@@ -19,7 +19,7 @@ def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=2048,
                 batch_size=256,
-                ent_coef=0.15,
+                ent_coef=0.1,
                 gamma=0.98,
                 gae_lambda=0.9,
                 clip_range=0.2,  # TODO: try using sched?
