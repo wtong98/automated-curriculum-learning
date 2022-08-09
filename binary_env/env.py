@@ -441,9 +441,10 @@ class TeacherPomcpAgent(Agent):
                 state = self._sample_prior()
                 self._simulate(state, self.history, 0)
         else:
-            # qrs = [state[1] for state in self.tree[self.history]['b']]
-            # qrs_mean = np.mean(qrs, axis=0)
-            # qrs_cov = self.q_reinv_scale * np.cov(qrs, rowvar=False)
+            params = [(state[2], state[3]) for state in self.tree[self.history]['b']]
+            eps, lr = zip(*params)
+            eps_bounds = (np.min(eps), np.max(eps))
+            lr_bounds = (np.min(lr), np.max(lr))
 
             print('ITER WITH HIST', self.history)
             iters = []
@@ -452,13 +453,10 @@ class TeacherPomcpAgent(Agent):
                 state_idx = np.random.choice(len(self.tree[self.history]['b']))
                 state = self.tree[self.history]['b'][state_idx]
 
-                # TODO: rethink reinvig strategy (jitter eps?)
-                # if np.random.random() < self.q_reinv_prob:
-                #     new_qrs = np.random.multivariate_normal(qrs_mean, qrs_cov)
-                #     samp_state = self.tree[self.history]['b'][state_idx]   # randomly select fixed attributes
-                #     state = (samp_state[0], new_qrs)
-                # else:
-                #     state = self.tree[self.history]['b'][state_idx]
+                if np.random.random() < self.q_reinv_prob:
+                    new_eps = np.random.uniform(*eps_bounds)
+                    new_lr = np.random.uniform(*lr_bounds)
+                    state = (state[0], state[1], new_eps, new_lr)
 
                 tot_iter, vict_iter = self._simulate(state, self.history, 0)
                 iters.append(tot_iter)
