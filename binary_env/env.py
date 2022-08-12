@@ -110,6 +110,68 @@ class CurriculumEnv(gym.Env):
         #     self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
         return self.student.score(length)
 
+class CurriculumEnvOld(gym.Env):
+    def __init__(self, goal_length=10, train_iter=50, train_round=None,
+                 p_eps=0.05, 
+                 teacher_reward=1,
+                 student_reward=1,
+                 student_qe_dist=None,
+                 student_params=None,
+                 anarchy_mode=False):
+        super().__init__()
+
+        self.student = None
+        self.goal_length = goal_length
+        self.train_iter = train_iter
+        self.train_round = train_round
+        self.p_eps = p_eps
+        self.teacher_reward = teacher_reward
+        self.student_reward = student_reward
+        self.student_qe_dist = student_qe_dist
+
+        self.observation_space = gym.spaces.Tuple((
+            gym.spaces.Discrete(goal_length), 
+            gym.spaces.Box(low=0, high=1, shape=(1,))))
+        self.N = 1
+
+        self.action_space = gym.spaces.Discrete(3)
+        self.student_params = student_params if student_params != None else {}
+        self.anarchy_mode = anarchy_mode
+    
+    def step(self, action):
+        if self.anarchy_mode:
+            self.N = action
+        else:
+            d_length = action - 1
+            self.N = np.clip(self.N + d_length, 1, self.goal_length)
+
+        trans = []
+        def _update_trans(_, reward):
+            result = int(reward > 0)
+            trans.append(result)
+
+        self.student.learn(BinaryEnv(self.N, reward=self.student_reward), max_iters=self.train_iter, max_rounds=self.train_round, done_hook=_update_trans)
+        log_prob = self._get_score(self.N)
+        reward = 0
+        is_done = False
+
+        if self.N == self.goal_length and -log_prob < self.p_eps:
+            reward = self.teacher_reward
+            is_done = True
+
+        return (self.N, log_prob), reward, is_done, {'transcript': trans}
+    
+    def reset(self):
+        self.student = StudentOld(q_e=self.student_qe_dist, **self.student_params)
+        student_score = self._get_score(self.goal_length, train=False)
+        self.N  = 1
+        return (self.N, student_score)
+
+    def _get_score(self, length, train=True):
+        # if train:
+        #     self.student.learn(BinaryEnv(length, reward=self.student_reward), max_iters=self.train_iter)
+        return self.student.score(length)
+
 
 class Agent:
     def __init__(self) -> None:
@@ -157,8 +219,7 @@ class Agent:
             self.iter += 1
 
 
-# TODO: include score as observed number of successes
-class Student(Agent):
+class StudentOld(Agent):
     def __init__(self, lr=0.05, gamma=1, q_e=None) -> None:
         super().__init__()
         self.lr = lr
@@ -193,6 +254,61 @@ class Student(Agent):
             _, prob = self.policy(next_state)
             exp_q = prob * self.q_r[next_state]
         self.q_r[old_state] += self.lr * (reward + self.gamma * exp_q - self.q_r[old_state])
+
+    def score(self, goal_state) -> float:
+        qs = [self.q_e[s] + self.q_r[s] for s in range(goal_state)]
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in qs])
+        return log_prob
+
+
+class Student(Agent):
+    def __init__(self, lr=0.05, q_e=None, n_step=1) -> None:
+        super().__init__()
+        self.lr = lr
+        self.n_step = n_step
+
+        # only track Q-values for action = 1, maps state --> value
+        if isinstance(q_e, numbers.Number):
+            self.q_e = defaultdict(lambda: q_e)
+        elif type(q_e) != type(None):
+            self.q_e = q_e
+        else:
+            self.q_e = defaultdict(int)
+
+        self.q_r = defaultdict(int)
+        self.buffer = []
+    
+    # softmax policy
+    def policy(self, state) -> np.ndarray:
+        q = self.q_e[state] + self.q_r[state]
+        prob = sig(q)
+        return np.array([1 - prob, prob])
+
+    def next_action(self, state) -> int:
+        _, prob = self.policy(state)
+        a = np.random.binomial(n=1, p=prob)
+        return a 
+    
+    # NOTE: specially adapted to binary env setting (deviates from vanilla n-step Sarsa)
+    def update(self, old_state, _, reward, next_state, is_done):
+        self.buffer.append(old_state)
+
+        if is_done:
+            if reward == 0:   # account for "updated" q_e
+                self.buffer = self.buffer[1:]
+
+            for state in self.buffer:
+                self.q_r[state] += self.lr * (reward - self.q_r[state])
+            
+            self.buffer = []
+        else:
+            if len(self.buffer) == self.n_step:
+                target_state = self.buffer[0]
+                self.buffer = self.buffer[1:]
+
+                _, prob = self.policy(next_state)
+                exp_q = prob * self.q_r[next_state]
+                self.q_r[target_state] += self.lr * (exp_q - self.q_r[target_state])
 
     def score(self, goal_state) -> float:
         qs = [self.q_e[s] + self.q_r[s] for s in range(goal_state)]

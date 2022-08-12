@@ -94,25 +94,121 @@ class TeacherUncertainOsc(Agent):
         prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
-def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
-    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr})
+
+class TeacherAdaptive(Agent):
+    def __init__(self, goal_length, threshold=0.95, tau=0.5, conf=0.75, m_factor=2) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.threshold = 0.95
+        self.tau = tau
+        self.conf = conf
+
+        self.trans_dict = defaultdict(list)
+        self.n = 1
+
+        p_eps = -np.log(tau)
+        raw_min_m = np.log(1 - conf) / (-p_eps) - 1
+        self.m = int(np.floor(raw_min_m)) * m_factor
+
+        self.interval_min = 1
+        self.interval_max = goal_length
+        self.interval_mid = int((self.interval_max + self.interval_min) / 2)
+        self.inc = None
+        self.transcript = []
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self.transcript.extend(trans)
+
+        if self.inc != None:   # incremental
+            low, high = self._get_conf_intv(self.transcript[-self.m:])
+            next_n = curr_n
+            print('TEST INTV', (low, high))
+            if high > self.threshold:
+                next_n = min(curr_n + self.inc, self.goal_length)
+                self.transcript = []
+            return next_n
+
+        elif len(self.transcript) > self.m:   # binary search
+            low, high = self._get_conf_intv(self.transcript)
+            print('TRANS', self.transcript)
+            print('INTV', (low, high))
+            print('LOW', self.interval_min)
+            print('MID', self.interval_mid)
+            print('HI', self.interval_max)
+
+            if self.tau > high:
+                self.interval_max = self.interval_mid
+                self.transcript = []
+            elif self.tau < low:
+                self.interval_min = self.interval_mid
+                self.transcript = []
+            else:
+                self.inc = self.interval_mid
+            
+            old_mid = self.interval_mid
+            self.interval_mid = int((self.interval_max + self.interval_min) / 2)
+            if old_mid == self.interval_mid:
+                self.inc = self.interval_mid
+
+        return self.interval_mid
+            
+    def _get_conf_intv(self, transcript, tau=None):
+        if tau == None:
+            tau = self.tau
+
+        success = np.sum(transcript)
+        total = len(transcript)
+        return beta.interval(self.conf, a=success+1, b=total-success+1)
+
+# TODO: need to retune estimators
+N, eps = to_cont(3, 0, 100)
+teacher = TeacherAdaptive(N, conf=0.25)
+teacher.m = 10
+env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1}, anarchy_mode=True)
+traj = [env.N]
+env.reset()
+
+obs = (1, [])
+for _ in range(1000):
+    action = teacher.next_action(obs)
+    obs, _, is_done, _ = env.step(action)
+    traj.append(env.N)
+
+    if is_done:
+        break
+
+plt.plot(traj)
+
+
+
+def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, n_step=1, inc=1):
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
     env.reset()
-    traj = [env.N]
+
+    curr_n = 1
+    traj = [curr_n]
 
     score = env._get_score(1, train=False)
     for _ in range(max_steps):
         if -score < env.p_eps:
-            action = 2
-        else:
-            action = 1
+            curr_n = min(curr_n + inc, goal_length)
         
-        (_, score), _, is_done, _ = env.step(action)
+        (_, score), _, is_done, _ = env.step(curr_n)
         traj.append(env.N)
 
         if is_done:
             break
     
     return traj
+
+
+def run_incremental_opt(eps=0, n_step=100, tau=0.5, **inc_kwargs):
+    prob = sig(eps)
+    opt_inc = np.log(tau) / np.log(prob)
+    opt_inc = int(np.round(opt_inc))
+    return run_incremental(inc=opt_inc, eps=eps, n_step=n_step, **inc_kwargs)
+
 
 def run_osc(eps=0, confidence=0.75, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
     teacher = TeacherUncertainOsc(goal_length, conf=confidence, **teacher_kwargs)
@@ -151,21 +247,26 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     return traj
 
 # <codecell>
-n_iters = 3
+n_iters = 5
 T = 5
 lr = 0.01
 max_steps = 10000
 
 N_eff = 3
-eps_eff = 0
+eps_eff = -4
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental n-step', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100}, []),
+    # Case('Incremental n-step skip', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'inc': 22}, []),
+    Case('Incremental n-step opt1', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.25}, []),
+    Case('Incremental n-step opt2', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.5}, []),
+    Case('Incremental n-step opt3', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.75}, []),
+    # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
