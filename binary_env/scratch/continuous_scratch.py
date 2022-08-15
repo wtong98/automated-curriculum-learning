@@ -21,7 +21,7 @@ class UncertainCurriculumEnv(CurriculumEnv):
         (self.N, _), reward, is_done, info = super().step(action)
         return (self.N, info['transcript']), reward, is_done, {}
 
-def to_cont(N=3, eps=0, dn_per_interval=1000):
+def to_cont(N=3, eps=0, dn_per_interval=100):
     prob = sig(eps) ** (1 / dn_per_interval)
     eps_cont = np.log(prob / (1 - prob))
     N_cont = N * dn_per_interval
@@ -96,24 +96,26 @@ class TeacherUncertainOsc(Agent):
 
 
 class TeacherAdaptive(Agent):
-    def __init__(self, goal_length, threshold=0.95, tau=0.5, conf=0.75, m_factor=2) -> None:
+    def __init__(self, goal_length, threshold=0.95, tau=0.5, conf=0.75, m_factor=2, abs_min_m=10, student=None) -> None:
         super().__init__()
         self.goal_length = goal_length
-        self.threshold = 0.95
+        self.threshold = threshold
         self.tau = tau
         self.conf = conf
+        self.student = student
 
         self.trans_dict = defaultdict(list)
         self.n = 1
 
-        p_eps = -np.log(tau)
+        p_eps = -np.log(threshold)
         raw_min_m = np.log(1 - conf) / (-p_eps) - 1
-        self.m = int(np.floor(raw_min_m)) * m_factor
+        self.m = max(int(np.floor(raw_min_m)) * m_factor, abs_min_m)
 
         self.interval_min = 1
         self.interval_max = goal_length
         self.interval_mid = int((self.interval_max + self.interval_min) / 2)
         self.inc = None
+        # self.inc = 100
         self.transcript = []
     
     def next_action(self, state):
@@ -121,21 +123,25 @@ class TeacherAdaptive(Agent):
         self.transcript.extend(trans)
 
         if self.inc != None:   # incremental
-            low, high = self._get_conf_intv(self.transcript[-self.m:])
             next_n = curr_n
-            print('TEST INTV', (low, high))
-            if high > self.threshold:
-                next_n = min(curr_n + self.inc, self.goal_length)
-                self.transcript = []
+            if len(self.transcript) > self.m:
+                prob_good = self._get_prob_good(self.transcript[-self.m:])
+                # print('CURR TRANS', self.transcript[-self.m:])
+                # print('PROB GOOD', prob_good)
+                # print('ACTUAL SCORE', np.exp(self.student.score(curr_n)))
+                if prob_good > self.conf:
+                # if np.exp(self.student.score(curr_n)) > self.threshold:
+                    next_n = min(curr_n + self.inc, self.goal_length)
+                    self.transcript = []
             return next_n
 
         elif len(self.transcript) > self.m:   # binary search
             low, high = self._get_conf_intv(self.transcript)
-            print('TRANS', self.transcript)
-            print('INTV', (low, high))
-            print('LOW', self.interval_min)
-            print('MID', self.interval_mid)
-            print('HI', self.interval_max)
+            # print('TRANS', self.transcript)
+            # print('INTV', (low, high))
+            # print('LOW', self.interval_min)
+            # print('MID', self.interval_mid)
+            # print('HI', self.interval_max)
 
             if self.tau > high:
                 self.interval_max = self.interval_mid
@@ -159,26 +165,31 @@ class TeacherAdaptive(Agent):
 
         success = np.sum(transcript)
         total = len(transcript)
-        return beta.interval(self.conf, a=success+1, b=total-success+1)
+        return beta.interval(1 - self.conf, a=success+1, b=total-success+1)
 
-# TODO: need to retune estimators
-N, eps = to_cont(3, 0, 100)
-teacher = TeacherAdaptive(N, conf=0.25)
-teacher.m = 10
-env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1}, anarchy_mode=True)
-traj = [env.N]
-env.reset()
+    def _get_prob_good(self, transcript):
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(self.threshold, a=success+1, b=total-success+1)
+        return 1 - prob_bad
 
-obs = (1, [])
-for _ in range(1000):
-    action = teacher.next_action(obs)
-    obs, _, is_done, _ = env.step(action)
-    traj.append(env.N)
+# N, eps = to_cont(3, -3, 100)
+# env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
+# traj = [env.N]
+# env.reset()
+# teacher = TeacherAdaptive(N, conf=0.2, tau=0.5, student=env.student)
 
-    if is_done:
-        break
+# obs = (1, [])
+# for _ in range(1000):
+#     action = teacher.next_action(obs)
+#     print('ACTION', action)
+#     obs, _, is_done, _ = env.step(action)
+#     traj.append(env.N)
 
-plt.plot(traj)
+#     if is_done:
+#         break
+
+# plt.plot(traj)
 
 
 
@@ -246,6 +257,23 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
+def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau=0.5):
+    teacher = TeacherAdaptive(goal_length, conf=conf, tau=tau)
+    env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj
+
 # <codecell>
 n_iters = 5
 T = 5
@@ -253,7 +281,7 @@ lr = 0.01
 max_steps = 10000
 
 N_eff = 3
-eps_eff = -4
+eps_eff = 0
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -266,6 +294,7 @@ cases = [
     Case('Incremental n-step opt1', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.25}, []),
     Case('Incremental n-step opt2', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.5}, []),
     Case('Incremental n-step opt3', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.75}, []),
+    Case('Adaptive', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'conf': 0.2, 'tau':0.5}, []),
     # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
 ]
 
@@ -303,4 +332,78 @@ fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
+# %% LONG COMPARISON PLOT
+n_iters = 5
+N = 3
+T = 5
+lr = 0.1
+max_steps = 500
+gamma = 0.9
+conf = 0.2
+bt_conf = 0.2
+bt_tau = 0.05
+# eff_eps = np.arange(-2, 2.1, step=0.5)
+eff_eps = np.arange(-4, -1, step=0.5)
+
+cont_params = [to_cont(N, e) for e in eff_eps]
+Ns, eps = zip(*cont_params)
+N = Ns[0]
+
+mc_iters = 1000
+bins = 10
+
+Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+
+all_cases = [
+    (
+        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        Case('Incremental (n-step)', run_incremental_opt, {'eps': e, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.5}, []),
+        Case('Adaptive', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'conf': 0.2, 'tau':0.5}, []),
+    ) for e in eps
+]
+
+for _ in tqdm(range(n_iters)):
+    for cases in all_cases:
+        for case in cases:
+            case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
+
+# <codecell>
+cases = zip(*all_cases)
+all_means = []
+all_ses = []
+
+for case_set in cases:
+    curr_means = []
+    curr_ses = []
+
+    for case in case_set:
+        run_lens = [len(run) for run in case.runs]
+        curr_means.append(np.mean(run_lens))
+        curr_ses.append(2 * np.std(run_lens) / np.sqrt(n_iters))
+
+    all_means.append(curr_means)
+    all_ses.append(curr_ses)
+
+
+width = 0.2
+# offset = np.array([-1, 0, 1])
+offset = np.array([-1, 0])
+x = np.arange(len(eps))
+# names = ['Incremental', 'Incremental (n-step)', 'Adaptive']
+names = ['Incremental (n-step)', 'Adaptive']
+
+# plt.yscale('log')
+
+for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
+    plt.bar(x+off, mean, yerr=se, width=width, label=name)
+    plt.xticks(x, labels=eff_eps)
+    plt.xlabel('Epsilon')
+    plt.ylabel('Iterations')
+
+plt.legend()
+plt.title(f'Teacher performance for N={N}')
+plt.tight_layout()
+
+plt.savefig(f'../fig/osc_perf_n_{N}_low_eps_cont.png')
 # %%
+
