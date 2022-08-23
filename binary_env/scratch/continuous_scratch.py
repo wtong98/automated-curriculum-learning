@@ -4,6 +4,7 @@ Algorithms at the continuum limit
 
 # <codecell>
 from collections import namedtuple
+from stringprep import in_table_a1
 import matplotlib as plt
 import numpy as np
 from scipy.stats import beta
@@ -96,93 +97,99 @@ class TeacherUncertainOsc(Agent):
 
 
 class TeacherAdaptive(Agent):
-    def __init__(self, goal_length, threshold=0.95, tau=0.5, conf=0.75, m_factor=2, abs_min_m=10, student=None) -> None:
+    def __init__(self, goal_length, threshold=0.95, threshold_low=0.05, tau=0.5, conf=0.95, max_m_factor=3, abs_min_m=5, cut_factor=2, student=None, with_osc=False) -> None:
         super().__init__()
         self.goal_length = goal_length
         self.threshold = threshold
+        self.threshold_low = threshold_low
         self.tau = tau
         self.conf = conf
         self.student = student
-
-        self.trans_dict = defaultdict(list)
-        self.n = 1
+        self.with_osc = with_osc
 
         p_eps = -np.log(threshold)
-        raw_min_m = np.log(1 - conf) / (-p_eps) - 1
-        self.m = max(int(np.floor(raw_min_m)) * m_factor, abs_min_m)
+        raw_min_m = int(np.round(np.log(1 - conf) / (-p_eps) - 1))
+        self.min_m = max(raw_min_m, abs_min_m)
+        self.max_m = self.min_m * max_m_factor
 
-        self.interval_min = 1
-        self.interval_max = goal_length
-        self.interval_mid = int((self.interval_max + self.interval_min) / 2)
+        self.cut_factor = cut_factor
+        self.prop_inc = goal_length // cut_factor
         self.inc = None
         # self.inc = 100
         self.transcript = []
+        self.in_osc = False
     
+    # TODO: test oscillating mechanic
     def next_action(self, state):
         curr_n, trans = state
-        self.transcript.extend(trans)
+        if self.in_osc:
+            self.in_osc = False
+            return curr_n + 1
+        else:
+            self.transcript.extend(trans)
 
-        if self.inc != None:   # incremental
-            next_n = curr_n
-            if len(self.transcript) > self.m:
-                prob_good = self._get_prob_good(self.transcript[-self.m:])
-                # print('CURR TRANS', self.transcript[-self.m:])
-                # print('PROB GOOD', prob_good)
-                # print('ACTUAL SCORE', np.exp(self.student.score(curr_n)))
-                if prob_good > self.conf:
-                # if np.exp(self.student.score(curr_n)) > self.threshold:
+            if self.inc != None:   # incremental
+                next_n = curr_n
+                if len(self.transcript) > self.min_m:
+                    if self.do_jump():
+                        next_n = min(curr_n + self.inc, self.goal_length)
+                    elif self.do_dive():
+                        next_n //= self.cut_factor
+                        self.inc //= self.cut_factor
+                    elif self.with_osc:
+                        self.in_osc = True
+                        return curr_n - 1
+                return next_n
+
+            elif len(self.transcript) > (self.min_m + self.max_m) // 2:   # binary search
+                next_n = self.prop_inc
+
+                if self.do_jump(thresh=self.tau):
+                    self.inc = self.prop_inc
                     next_n = min(curr_n + self.inc, self.goal_length)
                     self.transcript = []
-            return next_n
+                else:
+                    self.prop_inc //= self.cut_factor
+                    next_n = self.prop_inc
+                    self.transcript = []
 
-        elif len(self.transcript) > self.m:   # binary search
-            low, high = self._get_conf_intv(self.transcript)
-            # print('TRANS', self.transcript)
-            # print('INTV', (low, high))
-            # print('LOW', self.interval_min)
-            # print('MID', self.interval_mid)
-            # print('HI', self.interval_max)
-
-            if self.tau > high:
-                self.interval_max = self.interval_mid
-                self.transcript = []
-            elif self.tau < low:
-                self.interval_min = self.interval_mid
-                self.transcript = []
-            else:
-                self.inc = self.interval_mid
+                return next_n
             
-            old_mid = self.interval_mid
-            self.interval_mid = int((self.interval_max + self.interval_min) / 2)
-            if old_mid == self.interval_mid:
-                self.inc = self.interval_mid
-
-        return self.interval_mid
+            return self.prop_inc
             
-    def _get_conf_intv(self, transcript, tau=None):
-        if tau == None:
-            tau = self.tau
+    def do_jump(self, trans=None, thresh=None):
+        trans = self.transcript if trans == None else trans
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(trans[-k:], thresh=thresh)
+            if prob_good >= self.conf:
+                return True
+
+        return False
+
+    def do_dive(self):
+        rev_trans = [not bit for bit in self.transcript]
+        return self.do_jump(rev_trans, 1 - self.threshold_low)
+
+    def _get_prob_good(self, transcript, thresh=None):
+        if thresh == None:
+            thresh = self.threshold
 
         success = np.sum(transcript)
         total = len(transcript)
-        return beta.interval(1 - self.conf, a=success+1, b=total-success+1)
-
-    def _get_prob_good(self, transcript):
-        success = np.sum(transcript)
-        total = len(transcript)
-        prob_bad = beta.cdf(self.threshold, a=success+1, b=total-success+1)
+        prob_bad = beta.cdf(thresh, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
-# N, eps = to_cont(3, -3, 100)
+# N, eps = to_cont(3, 0, 100)
 # env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
 # traj = [env.N]
 # env.reset()
-# teacher = TeacherAdaptive(N, conf=0.2, tau=0.5, student=env.student)
+# teacher = TeacherAdaptive(N, threshold=0.8, tau=0.5, student=env.student)
 
 # obs = (1, [])
 # for _ in range(1000):
 #     action = teacher.next_action(obs)
 #     print('ACTION', action)
+#     print('SCORE', teacher.student.score(env.N))
 #     obs, _, is_done, _ = env.step(action)
 #     traj.append(env.N)
 
@@ -213,12 +220,70 @@ def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, n_step=1,
     
     return traj
 
-
-def run_incremental_opt(eps=0, n_step=100, tau=0.5, **inc_kwargs):
-    prob = sig(eps)
-    opt_inc = np.log(tau) / np.log(prob)
+def run_incremental_opt(goal_length=3, eps=0, n_step=100, tau=0.5):
+    cum_prob = sig(eps)
+    opt_inc = np.log(tau) / np.log(cum_prob)
     opt_inc = int(np.round(opt_inc))
-    return run_incremental(inc=opt_inc, eps=eps, n_step=n_step, **inc_kwargs)
+
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
+    env.reset()
+
+    curr_n = 1
+    traj = [curr_n]
+
+    score = env._get_score(1, train=False)
+    for _ in range(max_steps):
+        if -score < env.p_eps:
+            curr_n = min(curr_n + opt_inc, goal_length)
+        
+        (_, score), _, is_done, _ = env.step(curr_n)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj
+
+
+# N, eps = to_cont(10, 2, dn_per_interval=100)
+# tau = 0.5
+
+# cum_prob = sig(eps)
+# opt_inc = np.log(tau) / np.log(cum_prob)
+# opt_inc = int(np.round(opt_inc))
+
+# env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
+# env.reset()
+
+# curr_n = 1
+# traj = [curr_n]
+# all_scores = []
+
+# score = env._get_score(1, train=False)
+# for _ in range(100):
+#     if -score < env.p_eps:
+#         curr_n = min(curr_n + 100, N)
+#         cum_prob *= np.exp(-env.p_eps)
+#         opt_inc = np.log(tau) / np.log(cum_prob)
+#         opt_inc = max(int(np.round(opt_inc)), 1)
+#     all_scores.append(score)
+    
+#     (_, score), _, is_done, _ = env.step(curr_n)
+#     traj.append(env.N)
+
+#     if is_done:
+#         break
+
+# plt.plot(traj, alpha=0.8)
+# plt.ylabel('N', color='C0')
+# plt.gca().tick_params(axis='y', labelcolor='C0')
+# ax = plt.gca().twinx()
+# ax.plot(all_scores, color='C1', alpha=0.8)
+# ax.set_ylabel('log(p)', color='C1')
+# ax.tick_params(axis='y', labelcolor='C1')
+# plt.title('Example N = 10 with Incremental')
+# plt.savefig('example_n_10.png')
+
 
 
 def run_osc(eps=0, confidence=0.75, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
@@ -257,8 +322,8 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
-def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau=0.5):
-    teacher = TeacherAdaptive(goal_length, conf=conf, tau=tau)
+def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau=0.5, **kwargs):
+    teacher = TeacherAdaptive(goal_length, conf=conf, tau=tau, **kwargs)
     env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True)
     traj = [env.N]
     env.reset()
@@ -277,10 +342,11 @@ def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau
 # <codecell>
 n_iters = 5
 T = 5
-lr = 0.01
-max_steps = 10000
+lr = 0.1
+max_steps = 500
+cut_factor = 2
 
-N_eff = 3
+N_eff = 10
 eps_eff = 0
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
@@ -288,14 +354,9 @@ N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('Incremental n-step', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100}, []),
-    # Case('Incremental n-step skip', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'inc': 22}, []),
-    Case('Incremental n-step opt1', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.25}, []),
-    Case('Incremental n-step opt2', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.5}, []),
-    Case('Incremental n-step opt3', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.75}, []),
-    Case('Adaptive', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'conf': 0.2, 'tau':0.5}, []),
-    # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Incremental', run_incremental, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
+    # Case('Incremental (n-step)', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.95}, []),
+    Case('Adaptive', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.05, 'tau':0.75, 'cut_factor': cut_factor}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
@@ -305,10 +366,22 @@ for _ in tqdm(range(n_iters)):
 # <codecell>
 fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
+ax2 = axs[0].twinx()
 for i, case in enumerate(cases):
     label = {'label': case.name}
     for run in case.runs:
-        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        # axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        # label = {}
+
+        if i == 0:
+            axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+            axs[0].set_yticks([0, 1,2,3])
+            axs[0].set_ylabel('discrete', color=f'C{i}')
+            axs[0].tick_params(axis='y', labelcolor=f'C{i}')
+        else:
+            ax2.plot(run, color=f'C{i}', alpha=0.7, **label)
+            ax2.set_ylabel('continuous', color=f'C{i}')
+            ax2.tick_params(axis='y', labelcolor=f'C{i}')
         label = {}
 
 axs[0].legend()
@@ -317,7 +390,7 @@ axs[0].set_ylabel('N')
 # axs[0].set_yticks(np.arange(N) + 1)
 
 # axs[0].set_ylim((25, 50))
-# axs[0].set_xlim((100, 200))
+# axs[0].set_xlim((0, 400))
 
 
 all_lens = [[len(run) for run in case.runs] for case in cases]
@@ -328,13 +401,13 @@ all_names = [case.name for case in cases]
 axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
 axs[1].set_ylabel('Iterations')
 
-fig.suptitle(f'Epsilon = {eps}')
+fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-# plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
+# plt.savefig(f'../fig/comparison_n_{N}_eps_{eps}.png')
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
-N = 3
+N = 10
 T = 5
 lr = 0.1
 max_steps = 500
@@ -342,8 +415,8 @@ gamma = 0.9
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-# eff_eps = np.arange(-2, 2.1, step=0.5)
-eff_eps = np.arange(-4, -1, step=0.5)
+eff_eps = np.arange(-2, 2.1, step=0.5)
+# eff_eps = np.arange(-4, -1, step=0.5)
 
 cont_params = [to_cont(N, e) for e in eff_eps]
 Ns, eps = zip(*cont_params)
@@ -357,7 +430,7 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 all_cases = [
     (
         # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Incremental (n-step)', run_incremental_opt, {'eps': e, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.5}, []),
+        Case('Incremental (n-step)', run_incremental_opt, {'eps': e, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.95}, []),
         Case('Adaptive', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'conf': 0.2, 'tau':0.5}, []),
     ) for e in eps
 ]
@@ -404,6 +477,6 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/osc_perf_n_{N}_low_eps_cont.png')
+plt.savefig(f'../fig/comparison_n_{N}_inc_tau_0.95_cont.png')
 # %%
 

@@ -17,7 +17,7 @@ from curriculum import *
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
-                n_steps=2048,
+                n_steps=1024,
                 batch_size=256,
                 ent_coef=0.1,
                 gamma=0.98,
@@ -32,7 +32,7 @@ def make_model(env):
                     'net_arch': [{'pi': [128, 128], 'vf': [128, 128]}],
                     'activation_fn': torch.nn.ReLU
                 },
-                device='auto'
+                device='cpu'
                 )
 
 def run_session(student, teacher, eval_env, cb_params):
@@ -59,11 +59,24 @@ def to_sched(len_sched, break_sched):
     sched = [dict(length=l, breaks=b, **trail_args) for l, b in zip(len_sched, break_sched)]
     return sched
 
+def to_sched_cont():
+    trail_args = {
+        'width': 5,
+        'diff_rate': 0.02,
+        'radius': 70,
+        'reward_dist': -1,
+        'range': (-np.pi, np.pi)
+    }
+
+    def sched(x):
+        return dict(length=x, breaks=[(0.5, 0.6)], **trail_args)
+    
+    return sched
+
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
 
 
-# TODO: try interleaving increment of break with increment of length
 if __name__ == '__main__':
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
@@ -95,19 +108,19 @@ if __name__ == '__main__':
         (120, [(0.5, 0.69)]),
         (120, [(0.5, 0.7)]),
     ]
-    sched = to_sched(*zip(*sched))
+    # sched = to_sched(*zip(*sched))
+    sched = to_sched_cont()
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
     
-    print('SCHED', sched)
-
     # TODO: should've jumped by now?
     cases = [
         # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
+        # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
         # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
+        Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), # TODO: monitor probabilities (some seem impossible?)
     ]
 
     for i in tqdm(range(n_runs)):
@@ -133,7 +146,7 @@ if __name__ == '__main__':
     axs[0].legend()
     axs[0].set_xlabel('Iteration')
     axs[0].set_ylabel('Schedule index')
-    axs[0].set_yticks(np.arange(len(sched)))
+    # axs[0].set_yticks(np.arange(len(sched)))
 
     # axs[0].set_xlim((800, 900))
 
@@ -149,44 +162,10 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.savefig('trained/osc_break_ii/0/tt_trajs.png')
 
-# # <codecell>
-#     lens_inc = [len(traj) for traj in all_trajs_inc]
-#     lens_rand = [len(traj) for traj in all_trajs_rand]
-
-#     mean_inc = np.mean(lens_inc)
-#     std_inc = np.std(lens_inc) / np.sqrt(n_runs)
-
-#     mean_rand = np.mean(lens_rand)
-#     std_rand = np.std(lens_rand) / np.sqrt(n_runs)
-
-#     plt.bar([0, 1], [mean_inc, mean_rand], yerr=[2 * std_inc, 2 * std_rand], tick_label=['Incremental', 'Random'])
-#     plt.title('Teacher comparison on trail tracking task')
-#     plt.savefig('fig/tt_method_comparison.png')
-#     plt.clf()
-# # <codecell>
-#     # plot trajectories
-#     fig, axs = plt.subplots(2, 1, figsize=(12, 6))
-#     max_x = len(max(all_trajs_rand, key=lambda x: len(x)))
-
-#     for ax, trajs, name in zip(axs, (all_trajs_inc, all_trajs_rand), ('Incremental', 'Random')):
-#         ax_score = ax.twinx()
-#         for t in trajs:
-#             ns, score = zip(*t)
-#             ax.plot(ns, 'o--', color='C0', alpha=0.6)
-#             ax_score.plot(score, 'o--', color='C1', alpha=0.6)
-
-#         ax.set_xlabel('Lesson')
-#         ax.set_xlim(0, max_x)
-#         ax.set_ylabel('N', color='C0')
-#         ax_score.set_ylabel('Prob', color='C1')
-#         ax.set_title(name)
-
-#     fig.tight_layout()
-#     plt.savefig('fig/tt_trajs.png')
 
 # # %%  SHOWCASE PERFORMANCE IN PLOTS
-# save_path = Path('trained/osc_break/0/')
-# max_gen = 24
+# save_path = Path('trained/adp/0/')
+# max_gen = 25
 
 # # trail_args = {
 # #     'length': 80,
@@ -196,12 +175,12 @@ if __name__ == '__main__':
 # #     'reward_dist': -1,
 # #     'range': (-np.pi, np.pi)
 # # }
-# trail_args = sched[-1]
+# trail_args = sched(120)
 
 # for i in tqdm(range(1, max_gen + 1)):
 #     model_path = save_path / f'gen{i}'
 #     # print('loading model')
-#     model = PPO.load(model_path, device='cuda')
+#     model = PPO.load(model_path, device='cpu')
 
 #     n_runs = 8
 #     headings = np.linspace(-np.pi, np.pi, num=n_runs)
@@ -238,7 +217,7 @@ if __name__ == '__main__':
 #     plt.clf()
 
 
-# <codecell> SINGLE PROBE
+# # <codecell> SINGLE PROBE
 # model_path = Path('trained/remote/gen186')
 
 # # trail_args = {
@@ -286,4 +265,4 @@ if __name__ == '__main__':
 # fig.suptitle('Sample of agent runs')
 # fig.tight_layout()
 # plt.savefig('tmp.png')
-# %%
+# # %%
