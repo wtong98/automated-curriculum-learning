@@ -255,7 +255,7 @@ class OscillatingTeacher(Teacher):
         return 1 - prob_bad
 
 class AdaptiveTeacher(Teacher):
-    def __init__(self, goal_length, tau=0.5, threshold=0.8, threshold_low=0.05, conf=0.95, cut_factor=2, min_m_abs=5, max_m_factor=3, **teacher_kwargs):
+    def __init__(self, goal_length, tau=0.5, threshold=0.8, threshold_low=0.2, conf=0.95, cut_factor=2, min_m_abs=5, max_m_factor=3, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.goal_length = goal_length
         self.tau = tau

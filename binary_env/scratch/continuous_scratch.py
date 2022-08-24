@@ -4,7 +4,6 @@ Algorithms at the continuum limit
 
 # <codecell>
 from collections import namedtuple
-from stringprep import in_table_a1
 import matplotlib as plt
 import numpy as np
 from scipy.stats import beta
@@ -119,12 +118,12 @@ class TeacherAdaptive(Agent):
         self.transcript = []
         self.in_osc = False
     
-    # TODO: test oscillating mechanic
+    # TODO: clean up and simplify
     def next_action(self, state):
         curr_n, trans = state
         if self.in_osc:
             self.in_osc = False
-            return curr_n + 1
+            return curr_n + self.inc
         else:
             self.transcript.extend(trans)
 
@@ -133,12 +132,16 @@ class TeacherAdaptive(Agent):
                 if len(self.transcript) > self.min_m:
                     if self.do_jump():
                         next_n = min(curr_n + self.inc, self.goal_length)
+                        return next_n
                     elif self.do_dive():
                         next_n //= self.cut_factor
                         self.inc //= self.cut_factor
-                    elif self.with_osc:
-                        self.in_osc = True
-                        return curr_n - 1
+                        return next_n
+
+                if self.with_osc:
+                    self.in_osc = True
+                    return curr_n - self.inc
+
                 return next_n
 
             elif len(self.transcript) > (self.min_m + self.max_m) // 2:   # binary search
@@ -179,24 +182,25 @@ class TeacherAdaptive(Agent):
         prob_bad = beta.cdf(thresh, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
-# N, eps = to_cont(3, 0, 100)
-# env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
-# traj = [env.N]
-# env.reset()
-# teacher = TeacherAdaptive(N, threshold=0.8, tau=0.5, student=env.student)
+N, eps = to_cont(10, -1, 100)
+env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
+traj = [env.N]
+env.reset()
+teacher = TeacherAdaptive(N, threshold=0.8, threshold_low=0.3, tau=0.8, student=env.student, with_osc=True)
 
-# obs = (1, [])
-# for _ in range(1000):
-#     action = teacher.next_action(obs)
-#     print('ACTION', action)
-#     print('SCORE', teacher.student.score(env.N))
-#     obs, _, is_done, _ = env.step(action)
-#     traj.append(env.N)
+obs = (1, [])
+for _ in range(1000):
+    action = teacher.next_action(obs)
+    print('ACTION', action)
+    print('OSC', teacher.in_osc)
+    print('SCORE', teacher.student.score(env.N))
+    obs, _, is_done, _ = env.step(action)
+    traj.append(env.N)
 
-#     if is_done:
-#         break
+    if is_done:
+        break
 
-# plt.plot(traj)
+plt.plot(traj)
 
 
 
@@ -220,7 +224,7 @@ def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, n_step=1,
     
     return traj
 
-def run_incremental_opt(goal_length=3, eps=0, n_step=100, tau=0.5):
+def run_incremental_opt(goal_length=3, eps=0, n_step=100, lr=0.1, tau=0.5, max_steps=1000):
     cum_prob = sig(eps)
     opt_inc = np.log(tau) / np.log(cum_prob)
     opt_inc = int(np.round(opt_inc))
@@ -244,6 +248,32 @@ def run_incremental_opt(goal_length=3, eps=0, n_step=100, tau=0.5):
     
     return traj
 
+def run_incremental_perfect(goal_length=3, eps=0, T=5, n_step=100, lr=0.1, max_steps=1000):
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
+    env.reset()
+    traj = [env.N]
+
+    for _ in range(max_steps):
+        qs = np.array([eps + env.student.q_r[i] for i in range(goal_length)])
+        while len(qs) > 0 and -np.sum(np.log(sig(qs))) > env.p_eps:
+            qs = qs[:-1]
+        
+        action = min(len(qs) + 1, goal_length)
+        _, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj
+
+# N, eps = to_cont(10, 2, dn_per_interval=100)
+# traj = run_incremental_perfect(N, eps)
+# plt.plot(traj)
+# plt.show()
+# traj = np.array(traj)
+# diffs = traj[1:] - traj[:-1]
+# plt.plot(diffs)
 
 # N, eps = to_cont(10, 2, dn_per_interval=100)
 # tau = 0.5
@@ -354,9 +384,10 @@ N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Incremental', run_incremental, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
-    # Case('Incremental (n-step)', run_incremental_opt, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.95}, []),
-    Case('Adaptive', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.05, 'tau':0.75, 'cut_factor': cut_factor}, []),
+    Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+    Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
+    Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
@@ -370,19 +401,19 @@ ax2 = axs[0].twinx()
 for i, case in enumerate(cases):
     label = {'label': case.name}
     for run in case.runs:
-        # axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-        # label = {}
-
-        if i == 0:
-            axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-            axs[0].set_yticks([0, 1,2,3])
-            axs[0].set_ylabel('discrete', color=f'C{i}')
-            axs[0].tick_params(axis='y', labelcolor=f'C{i}')
-        else:
-            ax2.plot(run, color=f'C{i}', alpha=0.7, **label)
-            ax2.set_ylabel('continuous', color=f'C{i}')
-            ax2.tick_params(axis='y', labelcolor=f'C{i}')
+        axs[0].plot(run, color=f'C{i}', alpha=0.6, **label)
         label = {}
+
+        # if i == 0:
+        #     axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+        #     axs[0].set_yticks([0, 1,2,3])
+        #     axs[0].set_ylabel('discrete', color=f'C{i}')
+        #     axs[0].tick_params(axis='y', labelcolor=f'C{i}')
+        # else:
+        #     ax2.plot(run, color=f'C{i}', alpha=0.7, **label)
+        #     ax2.set_ylabel('continuous', color=f'C{i}')
+        #     ax2.tick_params(axis='y', labelcolor=f'C{i}')
+        # label = {}
 
 axs[0].legend()
 axs[0].set_xlabel('Iteration')
@@ -403,14 +434,14 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-# plt.savefig(f'../fig/comparison_n_{N}_eps_{eps}.png')
+plt.savefig(f'../fig/example_n_{N}_eps_{eps}.png')
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
 N = 10
 T = 5
 lr = 0.1
-max_steps = 500
+max_steps = 1000
 gamma = 0.9
 conf = 0.2
 bt_conf = 0.2
@@ -429,9 +460,10 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        # Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Incremental (n-step)', run_incremental_opt, {'eps': e, 'goal_length': N, 'lr': lr, 'n_step': 100, 'tau':0.95}, []),
-        Case('Adaptive', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'conf': 0.2, 'tau':0.5}, []),
+        Case('Incremental (PK)', run_incremental_perfect, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        Case('Adaptive (BT)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+        Case('Adaptive (Osc)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
+        Case('Adaptive (BT + Osc)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     ) for e in eps
 ]
 
@@ -459,11 +491,10 @@ for case_set in cases:
 
 
 width = 0.2
-# offset = np.array([-1, 0, 1])
-offset = np.array([-1, 0])
+offset = np.array([-2, -1, 0, 1])
+# offset = np.array([-1, 0])
 x = np.arange(len(eps))
-# names = ['Incremental', 'Incremental (n-step)', 'Adaptive']
-names = ['Incremental (n-step)', 'Adaptive']
+names = ['Incremental (PK)', 'Adaptive (BT)', 'Adaptive (Osc)', 'Adaptive (BT + Osc)']
 
 # plt.yscale('log')
 
@@ -477,6 +508,6 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/comparison_n_{N}_inc_tau_0.95_cont.png')
+plt.savefig(f'../fig/comparison_n_{N}_cont.png')
 # %%
 
