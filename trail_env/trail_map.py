@@ -258,7 +258,7 @@ class MeanderTrail(TrailMap):
         return np.exp(- np.min(dist2) / self.width)
 
     
-    def plot(self, res=200, ax=None, xmin=-100, xmax=100, ymin=-100, ymax=100):
+    def plot(self, res=200, ax=None, xmin=-120, xmax=120, ymin=-120, ymax=120):
         x = np.linspace(xmin, xmax, res)
         y = np.linspace(ymin, ymax, res)
         xx, yy = np.meshgrid(x, y)

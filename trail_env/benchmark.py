@@ -218,7 +218,7 @@ for i in tqdm(range(1, max_gen + 1)):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/adp/0/gen68.zip')
+model_path = Path('trained/osc_break_ii/0/gen172.zip')
 
 # trail_args = {
 #     'length': 160,
@@ -266,3 +266,39 @@ fig.suptitle('Sample of agent runs')
 fig.tight_layout()
 plt.savefig('tmp.png')
 # %%
+# TMP SINGLE PLOT
+
+model_path = Path('trained/osc_break_ii/0/gen172.zip')
+
+trail_args = sched(120)
+model = PPO.load(model_path, device='cpu')
+
+maps = []
+position_hists = []
+
+# print('preparing to generate headings')
+trail_map = MeanderTrail(**trail_args, heading=0)
+env = TrailEnv(trail_map, discrete=True, treadmill=True)
+
+obs = env.reset()
+for _ in range(200):
+    action, _ = model.predict(obs, deterministic=True)
+    obs, reward, is_done, _ = env.step(action)
+
+    if is_done:
+        break
+
+# print('gen heading')
+maps.append(trail_map)
+position_hists.append(env.agent.position_history)
+
+fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+
+for ax, m, position_history in zip([axs], maps, position_hists):
+    m.plot(ax=ax, ymin=-70, ymax=130)
+    ax.plot(*zip(*position_history), linewidth=2, color='black')
+
+fig.suptitle('Sample run')
+fig.tight_layout()
+plt.savefig('sample_run.svg')
+# plt.savefig('tmp.png')

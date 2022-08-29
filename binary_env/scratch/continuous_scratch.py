@@ -135,7 +135,7 @@ class TeacherAdaptive(Agent):
                         return next_n
                     elif self.do_dive():
                         next_n //= self.cut_factor
-                        self.inc //= self.cut_factor
+                        self.inc = max(self.inc // 2, 1)
                         return next_n
 
                 if self.with_osc:
@@ -182,25 +182,25 @@ class TeacherAdaptive(Agent):
         prob_bad = beta.cdf(thresh, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
-N, eps = to_cont(10, -1, 100)
-env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
-traj = [env.N]
-env.reset()
-teacher = TeacherAdaptive(N, threshold=0.8, threshold_low=0.3, tau=0.8, student=env.student, with_osc=True)
+# N, eps = to_cont(10, -1, 100)
+# env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=5, student_params={'lr': 0.1, 'n_step': 100}, anarchy_mode=True)
+# traj = [env.N]
+# env.reset()
+# teacher = TeacherAdaptive(N, threshold=0.8, threshold_low=0.3, tau=0.8, student=env.student, with_osc=True)
 
-obs = (1, [])
-for _ in range(1000):
-    action = teacher.next_action(obs)
-    print('ACTION', action)
-    print('OSC', teacher.in_osc)
-    print('SCORE', teacher.student.score(env.N))
-    obs, _, is_done, _ = env.step(action)
-    traj.append(env.N)
+# obs = (1, [])
+# for _ in range(1000):
+#     action = teacher.next_action(obs)
+#     print('ACTION', action)
+#     print('OSC', teacher.in_osc)
+#     print('SCORE', teacher.student.score(env.N))
+#     obs, _, is_done, _ = env.step(action)
+#     traj.append(env.N)
 
-    if is_done:
-        break
+#     if is_done:
+#         break
 
-plt.plot(traj)
+# plt.plot(traj)
 
 
 
@@ -248,32 +248,45 @@ def run_incremental_opt(goal_length=3, eps=0, n_step=100, lr=0.1, tau=0.5, max_s
     
     return traj
 
-def run_incremental_perfect(goal_length=3, eps=0, T=5, n_step=100, lr=0.1, max_steps=1000):
-    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
+def run_incremental_perfect(goal_length=3, eps=0, T=5, n_step=100, lr=0.1, max_steps=1000, threshold=0.95, track_qs=False):
+    env = CurriculumEnv(goal_length=goal_length, student_reward=20, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True, track_qs=False)
     env.reset()
     traj = [env.N]
+    all_qs = []
 
     for _ in range(max_steps):
         qs = np.array([eps + env.student.q_r[i] for i in range(goal_length)])
-        while len(qs) > 0 and -np.sum(np.log(sig(qs))) > env.p_eps:
+        if track_qs:
+            all_qs.append(qs - eps)
+
+        while len(qs) > 0 and np.exp(np.sum(np.log(sig(qs)))) < threshold:
             qs = qs[:-1]
         
         action = min(len(qs) + 1, goal_length)
-        _, _, is_done, _ = env.step(action)
+        _, _, is_done, info = env.step(action)
         traj.append(env.N)
 
         if is_done:
             break
     
-    return traj
+    if track_qs:
+        return traj, all_qs
+    else:
+        return traj
 
-# N, eps = to_cont(10, 2, dn_per_interval=100)
+# N, eps = to_cont(10, 0, dn_per_interval=100)
 # traj = run_incremental_perfect(N, eps)
-# plt.plot(traj)
-# plt.show()
+
 # traj = np.array(traj)
 # diffs = traj[1:] - traj[:-1]
-# plt.plot(diffs)
+
+# fig, axs = plt.subplots(2, 1, figsize=(6, 8))
+# axs[0].plot(traj)
+# axs[0].set_title('PK trajectory')
+# axs[1].plot(diffs)
+# axs[1].set_title('PK increments')
+
+# plt.savefig('../fig/pk_traj.png')
 
 # N, eps = to_cont(10, 2, dn_per_interval=100)
 # tau = 0.5
@@ -370,14 +383,14 @@ def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau
     return traj
 
 # <codecell>
-n_iters = 5
+n_iters = 3
 T = 5
 lr = 0.1
-max_steps = 500
+max_steps = 15000
 cut_factor = 2
 
 N_eff = 10
-eps_eff = 0
+eps_eff = -4
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -386,8 +399,8 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-    Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
-    Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
+    # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
+    # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
@@ -434,7 +447,7 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-plt.savefig(f'../fig/example_n_{N}_eps_{eps}.png')
+plt.savefig(f'../fig/example_n_{N}_eps_{eps:.2f}.png')
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
@@ -509,5 +522,42 @@ plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
 plt.savefig(f'../fig/comparison_n_{N}_cont.png')
-# %%
 
+# %%
+## PLOT HEATMAP
+T = 5
+lr = 0.1
+max_steps = 1500
+cut_factor = 2
+
+N_eff = 10
+eps_effs = [-4, -3, -2, -1, 0, 1, 2]
+
+results = [to_cont(N_eff, e, dn_per_interval=100) for e in eps_effs] 
+Ns, eps = zip(*results)
+N = Ns[0]
+
+Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+
+cases = [
+    Case('Incremental (PK)', run_incremental_perfect, {'eps': e, 'goal_length': N, 'lr': lr}, [])
+for e in eps]
+
+for case in tqdm(cases):
+    case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T, track_qs=True))
+# %%
+fig, axs = plt.subplots(2, 7, figsize=(21, 6))
+
+for col, case in enumerate(cases):
+    traj, qs = case.runs[0]
+    qs = np.array(qs)
+
+    axs[0,col].set_title(f'Eps (eff) = {eps_effs[col]}')
+    axs[0,col].plot(traj)
+    im = axs[1,col].imshow(qs.T, aspect='auto', vmin=0, vmax=20)
+
+    fig.colorbar(im, ax=axs[1,col])
+
+plt.savefig('../fig/heatmap_reward20.png')
+
+# %%

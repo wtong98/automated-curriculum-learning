@@ -2,5 +2,6 @@ __pycache__/
 fig/
 *.pkl
 *.png
+*.svg
 log/
 trained/
