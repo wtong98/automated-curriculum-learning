@@ -890,11 +890,13 @@ class TeacherPerfectKnowledgeDp(Agent):
 
 
 class TeacherMctsCont(Agent):
-    def __init__(self, N_eff, quant=100, T=5, threshold=0.95, student_params=None, n_iters=1000, gamma=0.9, explore_factor=1, n_jobs=16) -> None:
+    def __init__(self, N_eff, update_width=100, T=5, threshold=0.95, bandwidth=10, student_params=None, n_iters=1000, gamma=0.9, explore_factor=1, n_jobs=16) -> None:
         super().__init__()
         self.N_eff = N_eff
         self.T = T
+        self.update_width = update_width
         self.threshold = threshold
+        self.bandwidth = bandwidth
         self.student_params = {
             'lr': 0.1,
             'eps_eff': 0,
@@ -911,6 +913,8 @@ class TeacherMctsCont(Agent):
         self.n_jobs = n_jobs
 
         self.N, self.eps = TeacherMctsCont._to_cont(self.N_eff, self.student_params['eps_eff'])
+        self.actions = np.arange(self.N) + 1
+        self.actions_rand = np.random.permutation(self.N) + 1
 
         self.history = ()
         self.tree = {}
@@ -928,23 +932,68 @@ class TeacherMctsCont(Agent):
         self.tree = {}
     
     def next_action(self, prev_action=None, qr=None):
+        self.iter += 1
+
         if prev_action != None and type(qr) != None:
             qr = self._round(qr)
-            self.history += (prev_action, tuple(qr))
+            self.history += (prev_action, tuple(self._round(qr)))
             if self.history not in self.tree:
                 print('warn: rerooting tree')
                 self.tree = {}
                 self.history = self.history[-2:]
         else:
-            self.history += (1, tuple(np.zeros(self.N)))
+            self.history += (tuple(np.zeros(self.N)),)
 
-        args = [{'woot': 1}, {'heh': 2}]
+        # TODO: tune params for progressive widening
+        # TODO: debug parallelization and rerooting <-- STOPPED HERE
+        C = 10
+        alpha = 0.9
+
+        print('ITER', self.iter)
+
+        pw_size = np.ceil(C * (self.iter) ** alpha).astype(int)
+        actions = self.actions_rand[:pw_size]
+
+        print('PW_SIZE', pw_size)
+        print('ACTIONS', actions)
+
+        args = {
+            'tree': self.tree,
+            'history': self.history,
+            'bandwidth': self.bandwidth,
+            'actions': actions,
+            'n_particles': self.n_iters,
+            'N_cont': self.N,
+            'eps_cont': self.eps,
+            'threshold': self.threshold,
+            'T': self.T,
+            'lr': self.student_params['lr'],
+            'update_width': self.update_width,
+            'gamma': self.gamma,
+            'eps_end': 0.01,
+            'explore_factor': 1
+        }
+
+        all_args = [copy.deepcopy(args) for _ in range(self.n_jobs)]
+
         with Pool(self.n_jobs) as p:
-            results = p.map(_mcts_search, args)
+            trees = p.map(_mcts_search, all_args)
 
-        # TODO: recombine results
-        a = None
-        print('RESULTS', results)
+        all_a = []
+        all_vals = []
+        for t in trees:
+            vals = [t[self.history + (a,)]['v'] for a in self.actions]
+            action = np.argmax(vals) + 1
+            all_a.append(action)
+            all_vals.append(vals[action-1])
+        
+        # TODO: all quite consistent, using just one for now
+        print('ALL_A', all_a)
+        print('ALL_V', all_vals)
+        self.trees = trees
+
+        self.tree = trees[0]
+        a = all_a[0]
         return a
     
     def _round(self, val):
@@ -954,6 +1003,8 @@ class TeacherMctsCont(Agent):
 def _mcts_search(params):
     tree = params['tree']
     history = params['history']
+    actions = params['actions']
+    bandwidth = params['bandwidth']
     n_particles = params['n_particles']
     N_cont = params['N_cont']
     eps_cont = params['eps_cont']
@@ -965,8 +1016,11 @@ def _mcts_search(params):
     eps_end = params['eps_end']
     explore_factor = params['explore_factor']
 
-    # TODO: adapt UCB to more efficiently explore actions?
-    actions = np.arange(N_cont) + 1
+    # action_ker = np.zeros((len(actions), len(actions)))
+    # for i in range(len(actions)):
+    #     for j in range(len(actions)):
+    #         diff = (actions[i] - actions[j]) / bandwidth
+    #         action_ker[i,j] = np.exp(- diff ** 2)
 
     def _init_node():
         return {'v': 0, 'n': 0}
@@ -1027,7 +1081,7 @@ def _mcts_search(params):
         return n
 
     def _update_qr(n, qr, qe, lr, fail_idx):
-        qr = np.copy(qr)
+        qr = np.copy(qr).astype('float')
         if fail_idx == n:
             payoff = 10  # TODO: hardcoded
         else:
@@ -1051,7 +1105,7 @@ def _mcts_search(params):
         while gamma ** depth > eps_end:
             if history not in tree:
                 tree[history] = _init_node()
-                for a in actions:
+                for a in np.arange(N_cont) + 1:
                     proposal = history + (a,)
                     tree[proposal] = _init_node()
                 pred_reward = _rollout(history, depth)
@@ -1065,11 +1119,11 @@ def _mcts_search(params):
                 if curr_node['n'] > 0 and next_node['n'] > 0:
                     explore = explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
                 else:
-                    explore = 999  # arbitrarily high
+                    explore = 9999  # arbitrarily high
 
                 vals.append(next_node['v'] + explore)
 
-            a = np.argmax(vals) + 1
+            a = actions[np.argmax(vals)]
             state = history[-1]
             next_state, reward, is_done = _sample_transition(state, a)
             reward_stack.append(reward)
@@ -1085,6 +1139,7 @@ def _mcts_search(params):
             depth += 1
 
             if is_done:
+                print('SEQ', history)
                 break
 
         # backprop rewards
@@ -1098,32 +1153,33 @@ def _mcts_search(params):
     for _ in range(n_particles):
         _simulate(history)
 
-    return tree, history
+    return tree
     
-# TODO: debug and get working <-- STOPPED HERE
-tree, history = _mcts_search({
-    'tree': {},
-    'history': ((0,) * 300,),
-    'n_particles': 1000,
-    'N_cont': 300,
-    'eps_cont': 4.8,
-    'threshold': 0.95,
-    'T': 5,
-    'lr': 0.1,
-    'update_width': 100,
-    'gamma': 0.9,
-    'eps_end': 0.01,
-    'explore_factor': 1
-})
 
 
+teacher = TeacherMctsCont(3, n_jobs=1)
+# teacher.next_action()
 
-N_cont, eps_cont = TeacherMctsCont._to_cont(10, 0)
-threshold = 0.95
-lr = 0.1
-T = 10
-update_width = 100
+env = CurriculumEnv(goal_length=teacher.N, train_iter=999, train_round=5, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=teacher.eps, student_params={'lr': 0.1}, anarchy_mode=True)
+traj = [env.N]
+env.reset()
+prev_qr = None
+prev_a = None
 
+for _ in range(1000):
+    a = teacher.next_action(prev_a, prev_qr)
+    print('TOOK ACTION', a)
+
+    state, _, is_done, _ = env.step(a)
+    traj.append(a)
+
+    prev_a = a
+    prev_qr = [env.student.q_r[i] for i in range(teacher.N)]
+
+    if is_done:
+        break
+
+plt.plot(traj)
 
 # action = 300
 # init_qrs = np.zeros(N_cont)
