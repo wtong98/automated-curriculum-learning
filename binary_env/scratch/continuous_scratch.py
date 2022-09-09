@@ -382,6 +382,31 @@ def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau
     
     return traj
 
+def run_mcts(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500):
+    teacher = TeacherMctsCont(goal_length, n_jobs=4, n_iters=500, pw_init=10, student_params={'eps': eps})
+
+    env = CurriculumEnv(goal_length=teacher.N, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=teacher.eps, student_params={'lr': lr, 'n_step':100}, anarchy_mode=True)
+    traj = [env.N]
+    env.reset()
+    prev_qr = None
+    prev_a = None
+
+    for _ in range(max_steps):
+        a = teacher.next_action(prev_a, prev_qr)
+        print('TOOK ACTION', a)
+
+        _, _, is_done, _ = env.step(a)
+        traj.append(a)
+
+        prev_a = a
+        prev_qr = [env.student.q_r[i] for i in range(teacher.N)]
+
+        if is_done:
+            break
+
+    print('done!')
+    return traj
+
 # <codecell>
 n_iters = 3
 T = 5
@@ -390,7 +415,7 @@ max_steps = 15000
 cut_factor = 2
 
 N_eff = 10
-eps_eff = -4
+eps_eff = -1
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -399,6 +424,7 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+    # Case('MCTS', run_mcts, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
     # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
@@ -447,7 +473,7 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-plt.savefig(f'../fig/example_n_{N}_eps_{eps:.2f}.png')
+# plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
