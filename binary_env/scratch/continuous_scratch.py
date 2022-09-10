@@ -406,16 +406,16 @@ def run_mcts(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500):
 
     print('done!')
     return traj
-
+'''
 # <codecell>
-n_iters = 5
+n_iters = 3
 T = 5
 lr = 0.1
 max_steps = 15000
 cut_factor = 2
 
-N_eff = 10
-eps_eff = 0
+N_eff = 3
+eps_eff = -2
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -423,8 +423,8 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-    # Case('MCTS', run_mcts, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
+    Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+    Case('MCTS', run_mcts, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
     # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
@@ -460,7 +460,7 @@ axs[0].set_ylabel('N')
 # axs[0].set_yticks(np.arange(N) + 1)
 
 # axs[0].set_ylim((25, 50))
-# axs[0].set_xlim((0, 400))
+# axs[0].set_xlim((0, 30))
 
 
 all_lens = [[len(run) for run in case.runs] for case in cases]
@@ -474,10 +474,11 @@ axs[1].set_ylabel('Iterations')
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
 # plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
+'''
 
 # %% LONG COMPARISON PLOT
 n_iters = 5
-N = 10
+N_eff = 3
 T = 5
 lr = 0.1
 max_steps = 1000
@@ -488,7 +489,7 @@ bt_tau = 0.05
 eff_eps = np.arange(-2, 2.1, step=0.5)
 # eff_eps = np.arange(-4, -1, step=0.5)
 
-cont_params = [to_cont(N, e) for e in eff_eps]
+cont_params = [to_cont(N_eff, e) for e in eff_eps]
 Ns, eps = zip(*cont_params)
 N = Ns[0]
 
@@ -499,11 +500,10 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 all_cases = [
     (
-        Case('Incremental (PK)', run_incremental_perfect, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        # Case('Incremental (PK)', run_incremental_perfect, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         Case('Adaptive (BT)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-        Case('Adaptive (Osc)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
-        Case('Adaptive (BT + Osc)', run_adaptive, {'eps': e, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
-    ) for e in eps
+        Case('MCTS', run_mcts, {'eps': eff_eps[i], 'goal_length': N_eff, 'lr': lr}, []),
+    ) for i, e in enumerate(eps)
 ]
 
 for _ in tqdm(range(n_iters)):
@@ -530,10 +530,10 @@ for case_set in cases:
 
 
 width = 0.2
-offset = np.array([-2, -1, 0, 1])
+offset = np.array([-1, 0, 1])
 # offset = np.array([-1, 0])
 x = np.arange(len(eps))
-names = ['Incremental (PK)', 'Adaptive (BT)', 'Adaptive (Osc)', 'Adaptive (BT + Osc)']
+names = ['Incremental (PK)', 'Adaptive (BT)', 'MCTS']
 
 # plt.yscale('log')
 
@@ -547,8 +547,8 @@ plt.legend()
 plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
-plt.savefig(f'../fig/comparison_n_{N}_cont.png')
-
+plt.savefig(f'../fig/comparison_n_{N_eff}_cont.png')
+'''
 # %%
 ## PLOT HEATMAP
 T = 5
@@ -587,3 +587,4 @@ for col, case in enumerate(cases):
 plt.savefig('../fig/heatmap_reward20.png')
 
 # %%
+'''
