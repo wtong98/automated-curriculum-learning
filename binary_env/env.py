@@ -10,6 +10,7 @@ import sys
 from collections import defaultdict
 from multiprocessing import Pool
 import numbers
+import warnings
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
@@ -914,10 +915,23 @@ class MctsTree:
         else:
             node[key[-1]] = MctsNode(value)
     
+    def __contains__(self, key):
+        try:
+            node = self._traverse(key)
+        except:
+            return False
+        return node != None
+    
     def reroot(self, key):
         new_root = self._traverse(key)
         self.root = MctsNode(None)
         self.root[key[-1]] = new_root
+    
+    def merge(self, other, merge_func):
+        self.root.merge(other.root, merge_func)
+    
+    def __str__(self):
+        return str(self.root)
 
 
 class MctsNode:
@@ -933,24 +947,41 @@ class MctsNode:
     
     def __setitem__(self, key, node):
         self.children[key] = node
+
+    def __eq__(self, other):
+        if other == None:
+            return False
+
+        return self.value == other.value
+    
+    def merge(self, other, merge_func):
+        if self.value != None and other.value != None:
+            self.value = merge_func(self.value, other.value)
+
+        for key, child in other.children.items():
+            if key in self.children:
+                self.children[key].merge(child, merge_func)
+            else:
+                self.children[key] = child
+    
+    def __str__(self):
+        children_str = '\n'.join([f'{key}: {str(child)}' for key, child in self.children.items()])
+        return f'{self.value} -> [{children_str}]'
+
         
-# TODO: integrate tree into MCTS
 # tree = MctsTree()
-# tree[('woot',)] = 2
-# tree[('woot', 'yeah')] = 3
-# print(tree[('woot',)])
-# print(tree[('woot', 'yeah')])
-# tree[('woot', 'yo')] = 10
-# print(tree[('woot', 'yo')])
-# print(tree[('woot', 'yeah')])
-# tree[('woot',)] = 20
-# print(tree[('woot',)])
-# print(tree[('woot', 'yeah')])
+# tree[('a',)] = 1
+# tree[('a', 'b',)] = 2
+# tree[('a', 'b_')] = 3
+# print(str(tree))
 
-# tree.reroot(('woot','yeah',))
-# print(tree[('yeah',)])
-# print(tree[('woot',)])
+# tree2 = MctsTree()
+# tree2[('a',)] = 1
+# tree2[('a', 'b__',)] = 20
+# tree2[('a', 'b_')] = 30
 
+# tree.merge(tree2, lambda a,b: a + b)
+# print(str(tree))
 
 class TeacherMctsCont(Agent):
     def __init__(self, N_eff, update_width=100, T=5, threshold=0.95, bandwidth=10, student_params=None, n_iters=1000, gamma=0.9, pw_init=5, pw_alpha=0.8, explore_factor=1, n_jobs=16) -> None:
@@ -983,7 +1014,7 @@ class TeacherMctsCont(Agent):
         self.actions_rand = np.append(self.N, self.actions_rand)  # ensure goal length is always present
 
         self.history = ()
-        self.tree = {}
+        self.tree = MctsTree()
 
     @staticmethod
     def _to_cont(N_eff, eps_eff, dn_per_interval=100):
@@ -995,7 +1026,7 @@ class TeacherMctsCont(Agent):
 
     def reset(self):
         self.history = ()
-        self.tree = {}
+        self.tree = MctsTree()
     
     def next_action(self, prev_action=None, qr=None):
         self.iter += 1
@@ -1008,12 +1039,14 @@ class TeacherMctsCont(Agent):
             self.history += (prev_action, tuple(self._round(qr)))
             if self.history not in self.tree:
                 print('warn: rerooting tree')
-                self.tree = {}
-                self.history = self.history[-2:]
+                self.tree = MctsTree()
+                self.history = self.history[-1:]
+            else:
+                self.tree.reroot(self.history)
+                self.history = self.history[-1:]
         else:
-            self.history += (tuple(np.zeros(self.N)),)
+            self.history = (tuple(np.zeros(self.N)),)
             
-
         print('ITER', self.iter)
         pw_size = np.ceil(self.pw_init * (self.iter) ** self.pw_alpha).astype(int)
         actions = self.actions_rand[:pw_size]
@@ -1054,32 +1087,29 @@ class TeacherMctsCont(Agent):
         
         print('ALL_A', all_a)
         print('ALL_V', all_vals)
-        self.trees = trees
+        # self.trees = trees
         a_ker = _rbf_kernel(all_a, self.bandwidth)
         votes = a_ker @ np.array(all_vals).reshape(-1, 1)
         print('VOTES', votes)
         best_idx = np.argmax(votes.flatten())
         a = all_a[best_idx]
 
-        self.tree = self._merge_trees(trees, self.history + (a,))
+        self.tree = self._merge_trees(trees)
         return a
     
-    def _merge_trees(self, trees, hist=None):
-        total_tree = {}
-        for t in trees:
-            for k, node in t.items():
-                if hist != None and k[:len(hist)] != hist:
-                    continue
+    def _merge_trees(self, trees):
+        total_tree = trees[0]
 
-                if k in total_tree:
-                    total_n = total_tree[k]['n'] + node['n']
-                    if total_n == 0:
-                        continue
-                    avg_val = (total_tree[k]['n'] * total_tree[k]['v'] / total_n ) + (node['n'] * node['v'] / total_n)
-                    total_tree[k]['n'] = total_n
-                    total_tree[k]['v'] = avg_val
-                else:
-                    total_tree[k] = node
+        def merge_func(n1, n2):
+            total_n = n1['n'] + n2['n']
+            total_v = 0
+            if total_n != 0:
+                total_v = (n1['n'] * n1['v'] + n2['n'] * n2['v']) / total_n
+            return {'n': total_n, 'v': total_v}
+
+        for t in trees[1:]:
+            total_tree.merge(t, merge_func)
+
         return total_tree
     
     def _round(self, val):
@@ -1189,28 +1219,25 @@ def _mcts_search(params):
         depth = 0
 
         while gamma ** depth > eps_end:
-            # print(40 * '-')
-            # print('TREE:', [k[1::2] for k in tree.keys() if k[-1] in actions])
-            # print('NEXT HIST', history[1::2])
             if history not in tree:
-                tree[history] = _init_node()
-                for a in np.arange(N_cont) + 1:
-                    proposal = history + (a,)
-                    tree[proposal] = _init_node()
+                new_node = MctsNode(_init_node())
+                new_node.children = {a: MctsNode(_init_node()) for a in np.arange(N_cont) + 1}
+                curr_node = tree._traverse(history[:-1])
+                curr_node.children[history[-1]] = new_node
+
                 pred_reward = _rollout(history, depth)
-                # print("ROLLED")
                 reward_stack.append(pred_reward)
                 break
-
-            all_next_nodes = [tree[history + (a_,)] for a_ in actions]
+            
+            children = tree._traverse(history).children
+            all_next_nodes = [children[a].value for a in actions]
             results = np.array([(n['v'], n['n']) for n in all_next_nodes])
             exp_val = K @ (results[:,0] * results[:,1]).reshape(-1, 1)
             visits = K @ results[:,1].reshape(-1, 1) + 1e-8
 
-            try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
                 vals = exp_val + explore_factor * np.sqrt(np.log(np.sum(visits)) / visits)
-            except RuntimeWarning:
-                pass  # TODO: squelched
 
             # print('NEXT N', all_next_nodes)
             # print('VISITS', visits)
@@ -1257,10 +1284,9 @@ def _mcts_search(params):
 
     return tree
     
-# <codecell>
 
 if __name__ == '__main__':
-    teacher = TeacherMctsCont(3, n_jobs=4, n_iters=500, pw_init=5)
+    teacher = TeacherMctsCont(10, n_jobs=48, n_iters=50, pw_init=5, gamma=0.97)
     # teacher.next_action()
 
     env = CurriculumEnv(goal_length=teacher.N, train_iter=999, train_round=5, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=teacher.eps, student_params={'lr': 0.1, 'n_step':100}, anarchy_mode=True)
@@ -1284,6 +1310,7 @@ if __name__ == '__main__':
 
     print('done!')
     plt.plot(traj)
+    plt.savefig('traj.png')
 
 # <codecell>
 # # TODO: validate closeness of teacher's model and student

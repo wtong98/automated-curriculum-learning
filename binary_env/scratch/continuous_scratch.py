@@ -383,7 +383,7 @@ def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau
     return traj
 
 def run_mcts(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500):
-    teacher = TeacherMctsCont(goal_length, n_jobs=4, n_iters=500, pw_init=10, student_params={'eps': eps})
+    teacher = TeacherMctsCont(goal_length, n_jobs=4, n_iters=500, pw_init=5, student_params={'eps': eps})
 
     env = CurriculumEnv(goal_length=teacher.N, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=teacher.eps, student_params={'lr': lr, 'n_step':100}, anarchy_mode=True)
     traj = [env.N]
@@ -408,14 +408,14 @@ def run_mcts(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500):
     return traj
 
 # <codecell>
-n_iters = 3
+n_iters = 5
 T = 5
 lr = 0.1
 max_steps = 15000
 cut_factor = 2
 
 N_eff = 10
-eps_eff = -1
+eps_eff = 0
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -423,7 +423,7 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+    # Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
     # Case('MCTS', run_mcts, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
     # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
