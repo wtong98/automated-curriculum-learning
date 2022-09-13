@@ -382,8 +382,8 @@ def run_adaptive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau
     
     return traj
 
-def run_mcts(eps_eff=0, goal_length=3, T=3, lr=0.1, max_steps=500):
-    teacher = TeacherMctsCont(goal_length, n_jobs=4, n_iters=500, pw_init=5, student_params={'eps_eff': eps_eff})
+def run_mcts(eps_eff=0, goal_length=3, T=3, lr=0.1, max_steps=500, gamma=0.95, n_iters=500, n_jobs=4, pw_init=5):
+    teacher = TeacherMctsCont(goal_length, n_jobs=n_jobs, n_iters=n_iters, pw_init=pw_init, gamma=gamma, student_params={'eps_eff': eps_eff})
 
     env = CurriculumEnv(goal_length=teacher.N, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=teacher.eps, student_params={'lr': lr, 'n_step':100}, anarchy_mode=True)
     traj = [env.N]
@@ -406,7 +406,7 @@ def run_mcts(eps_eff=0, goal_length=3, T=3, lr=0.1, max_steps=500):
 
     print('done!')
     return traj
-'''
+
 # <codecell>
 n_iters = 3
 T = 5
@@ -414,8 +414,8 @@ lr = 0.1
 max_steps = 15000
 cut_factor = 2
 
-N_eff = 3
-eps_eff = -2
+N_eff = 10
+eps_eff = 0
 
 N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
@@ -423,8 +423,8 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-    Case('MCTS', run_mcts, {'eps': eps_eff, 'goal_length': N_eff, 'lr': lr}, []),
+    # Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
+    Case('MCTS', run_mcts, {'eps_eff': eps_eff, 'goal_length': N_eff, 'lr': lr, 'gamma': 0.97, 'n_jobs': 48, 'n_iters': 50, 'pw_init': 10}, []),
     # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
@@ -473,9 +473,9 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-# plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
-'''
+plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
 
+'''
 # %% LONG COMPARISON PLOT
 n_iters = 5
 N_eff = 3
@@ -548,7 +548,7 @@ plt.title(f'Teacher performance for N={N}')
 plt.tight_layout()
 
 plt.savefig(f'../fig/comparison_n_{N_eff}_cont.png')
-'''
+
 # %%
 ## PLOT HEATMAP
 T = 5
