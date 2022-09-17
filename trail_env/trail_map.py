@@ -8,6 +8,9 @@ author: William Tong
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.special import kn as _kn
+
+def K_0(x): return _kn(0, x)
 
 
 class TrailMap:
@@ -340,12 +343,60 @@ class BrokenMeanderTrail(MeanderTrail):
         super().reset()
 
 
+# NOTE: wind speed fixed along direction of negative y axis
+class PlumeTrail(TrailMap):
+    def __init__(self, start=None, end=None,
+                 diffusivity=1,
+                 emission_rate=0.5,
+                 particle_lifetime=150,
+                 wind_speed=1,
+                 sensor_size=1):
+        super().__init__(start, end)
+
+        self.D = diffusivity
+        self.R = emission_rate
+        self.tau = particle_lifetime
+        self.V = wind_speed
+        self.a = sensor_size
+
+        self.scale = np.sqrt((self.D * self.tau) / (1 + (self.V ** 2 * self.tau) / (4 * self.D)))
+
+        self.rate_denom = np.log(self.scale / self.a)
+        if self.scale < self.a:
+            print('warn: sensor size is larger than scale, truncating rate')
+            self.rate_denom = 1e-8
+
+        self.base_rate = self.R / self.rate_denom
+
+
+    def sample(self, x, y, return_rate=False):
+        wind_factor = np.exp((self.end[1] - y) * self.V / 2 * self.D)
+        dist_factor = K_0(np.linalg.norm(self.end - [x, y]) / self.scale)
+        rate = self.base_rate * wind_factor * dist_factor
+
+        if return_rate:
+            return rate
+        else:
+            return np.random.poisson(rate) / self.base_rate  # TODO: or binary?
+
+    def plot(self):
+        x = np.linspace(-20, 20, 100)
+        y = np.linspace(-30, 10, 100)
+        xx, yy = np.meshgrid(x, y)
+
+        odors_contours = np.array([self.sample(px, py, return_rate=True) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
+        odors_samples = np.array([self.sample(px, py, return_rate=False) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
+
+        plt.contourf(x, y, odors_samples)
+        plt.colorbar()
+
+        plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
+
+    def reset(self):
+        pass
+
+
 if __name__ == '__main__':
-    # trail = MeanderTrail(width=10, radius=70, diff_rate=0.05, length=65)
-    trail = MeanderTrail(width=10, radius=50, diff_rate=0.03, length=100, breaks=[(0.6, 0.8)], reward_dist=-1)
-    # trail = BrokenMeanderTrail(exp_breaks=1, exp_len=10, trail_length=100, diff_rate=0.01)
+    trail = PlumeTrail(wind_speed=2)  # TODO: debug with higher wind speeds
     trail.plot()
-    plt.savefig('fig/meander_trail.png')
-
-
 # %%
