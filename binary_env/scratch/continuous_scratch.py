@@ -424,7 +424,7 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 cases = [
     Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-    Case('MCTS', run_mcts, {'eps_eff': eps_eff, 'goal_length': N_eff, 'lr': lr, 'gamma': 0.97, 'n_jobs': 48, 'n_iters': 50, 'pw_init': 10}, []),
+    # Case('MCTS', run_mcts, {'eps_eff': eps_eff, 'goal_length': N_eff, 'lr': lr, 'gamma': 0.97, 'n_jobs': 48, 'n_iters': 50, 'pw_init': 10}, []),
     # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
@@ -473,8 +473,9 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon (eff) = {eps_eff}')
 fig.tight_layout()
-plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
+# plt.savefig(f'../fig/example_n_{N_eff}_eps_{eps_eff:.2f}.png')
 
+# <codecell>
 '''
 # %% LONG COMPARISON PLOT
 n_iters = 5

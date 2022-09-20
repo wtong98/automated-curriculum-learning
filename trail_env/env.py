@@ -5,11 +5,12 @@ author: William Tong (wtong@g.harvard.edu)
 """
 
 # <codecell>
+from itertools import repeat
+from typing import Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 from skimage.transform import rescale
-from typing import Tuple
 
 import gym
 from gym import spaces
@@ -121,11 +122,12 @@ class TrailEnv(gym.Env):
 
 
 class TrailAgent:
-    def __init__(self, trail_map, view_distance, scale=1, y_adjust=0):
+    def __init__(self, trail_map, view_distance, is_egocentric=True, scale=1, y_adjust=0):
         self.position = [0, 0]
         self.heading = 0
         self.map = trail_map
         self.view_distance = view_distance
+        self.is_egocentric = is_egocentric
         self.observation_scale = scale
         self.y_adjust = y_adjust
 
@@ -191,8 +193,68 @@ class TrailAgent:
         self_obs = np.zeros((2 * self.view_distance * self.observation_scale, 2 * self.view_distance * self.observation_scale))
         total_obs = np.stack((pos_obs, odor_obs, self_obs), axis=-1)
         return total_obs
-
+    
     def make_pos_observation(self):
+        past_pos = np.vstack(self.position_history)
+        return self._build_obs(past_pos, interpolate=True)
+
+    def make_odor_observation(self):
+        past = np.vstack(self.odor_history)
+        past_odor = past[:, 0] * 255
+        past_pos = past[:, 1:]
+        return self._build_obs(past_pos, past_odor, pad=1)
+    
+    def _build_obs(self, pos, magnitude=None, pad=0, interpolate=False):
+        if type(magnitude) == type(None):
+            magnitude = repeat(255)
+
+        orig_trans = -np.tile(self.position, (len(pos), 1))
+        if self.is_egocentric:
+            rot_ang = self.heading
+            rot_trans = np.array([
+                [np.cos(rot_ang), -np.sin(rot_ang)],
+                [np.sin(rot_ang), np.cos(rot_ang)]
+            ])
+            ego = (pos + orig_trans) @ rot_trans.T
+        else:
+            ego = (pos + orig_trans)
+
+        ego_pos = ego + self.view_distance
+        ego_pos[:,1] += int(self.y_adjust * self.view_distance)  # shift upwards
+
+        odor_img = np.zeros((2 * self.view_distance, 2 * self.view_distance))
+        for i, (measure, pos) in enumerate(zip(magnitude, ego_pos)):
+            if interpolate and i+1 < len(ego_pos):
+                next_point = ego_pos[i + 1]
+                d = next_point - pos
+                steps = 2 * np.sum(np.abs(next_point - pos)).astype('int')
+                dx = (d[0] / steps) if steps != 0 else 0
+                dy = (d[1] / steps) if steps != 0 else 0
+
+                for i in range(steps):
+                    x = np.round(pos[0] + i * dx).astype(int)
+                    y = np.round(pos[1] + i * dy).astype(int)
+                    odor_img[x,y] = measure
+
+            else:
+                x_pos = int(pos[0])
+                y_pos = int(pos[1])
+                for x_ in range(x_pos - pad, x_pos + pad + 1):
+                    for y_ in range(y_pos - pad, y_pos + pad + 1):
+                        x_coord, y_coord = x_, y_
+                        if 0 <= x_coord < self.view_distance * 2 - 1 \
+                                and 0 <= y_coord < self.view_distance * 2 - 1:
+
+                            x = np.round(x_coord).astype(int)
+                            y = np.round(y_coord).astype(int)
+                            odor_img[x, y] = measure
+
+        odor_img = np.flip(odor_img.T, axis=0)
+        odor_img_scale = rescale(odor_img, self.observation_scale)
+        return odor_img_scale.astype(np.uint8)
+
+
+    def make_pos_observation_old(self):
         pos_img = np.zeros((2 * self.view_distance, 2 * self.view_distance))
         past_pos = np.vstack(self.position_history)
 
@@ -227,7 +289,7 @@ class TrailAgent:
         pos_img_scale = rescale(pos_img, self.observation_scale)
         return pos_img_scale.astype(np.uint8)
 
-    def make_odor_observation(self):
+    def make_odor_observation_old(self):
         odor_img = np.zeros((2 * self.view_distance, 2 * self.view_distance))
         past = np.vstack(self.odor_history)
         past_odor = past[:, 0]
@@ -265,3 +327,21 @@ class TrailAgent:
         self.map.plot()
         plt.plot(*self.position, 'ro')
         plt.show()
+
+
+if __name__ == '__main__':
+    trail = RoundTrail()
+    agent = TrailAgent(trail, 20)
+    agent.sniff()
+    agent.move_direct(3, -5)
+    agent.sniff()
+    agent.move_direct(3, -5)
+    agent.sniff()
+    agent.move_direct(3, -5)
+    agent.sniff()
+
+    agent.heading = np.pi/2
+    # agent.is_egocentric = False
+
+    obs = agent.make_observation()
+    plt.imshow(obs)

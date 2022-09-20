@@ -12,6 +12,9 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 import torch
 from tqdm import tqdm
 
+import sys
+sys.path.append('../')
+
 from env import TrailEnv
 from curriculum import *
 
@@ -22,7 +25,7 @@ def make_model(env):
                 ent_coef=0.1,
                 gamma=0.98,
                 gae_lambda=0.9,
-                clip_range=0.2,  # TODO: try using sched?
+                clip_range=0.2,
                 max_grad_norm=1,
                 vf_coef=0.36,
                 n_epochs=5,
