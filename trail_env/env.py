@@ -234,7 +234,9 @@ class TrailAgent:
                 for i in range(steps):
                     x = np.round(pos[0] + i * dx).astype(int)
                     y = np.round(pos[1] + i * dy).astype(int)
-                    odor_img[x,y] = measure
+                    if 0 <= x < self.view_distance * 2 \
+                            and 0 <= y < self.view_distance * 2:
+                        odor_img[x,y] = measure
 
             else:
                 x_pos = int(pos[0])

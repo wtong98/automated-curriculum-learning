@@ -17,6 +17,7 @@ sys.path.append('../')
 
 from env import TrailEnv
 from curriculum import *
+from trail_map import *
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
@@ -35,7 +36,7 @@ def make_model(env):
                     'net_arch': [{'pi': [128, 128], 'vf': [128, 128]}],
                     'activation_fn': torch.nn.ReLU
                 },
-                device='cpu'
+                device='auto'
                 )
 
 def run_session(student, teacher, eval_env, cb_params):
@@ -50,31 +51,27 @@ def make_break_sched(n=8, start_len=80, end_len=160, inc=0.025):
     break_sched = [[], []] + [[(0.5, 0.5 + i * inc)] for i in range(1, n + 1)]
     return to_sched(len_sched, break_sched)
 
-def to_sched(len_sched, break_sched):
+def to_sched(lens):
     trail_args = {
-        'width': 5,
-        'diff_rate': 0.02,
-        'radius': 70,
-        'reward_dist': -1,
-        'range': (-np.pi, np.pi)
+        'start': np.array([0,0]),
     }
 
-    sched = [dict(length=l, breaks=b, **trail_args) for l, b in zip(len_sched, break_sched)]
+    sched = [dict(end=np.array([0, l]), **trail_args) for l in lens]
     return sched
 
-def to_sched_cont():
-    trail_args = {
-        'width': 5,
-        'diff_rate': 0.02,
-        'radius': 70,
-        'reward_dist': -1,
-        'range': (-np.pi, np.pi)
-    }
+# def to_sched_cont():
+#     trail_args = {
+#         'width': 5,
+#         'diff_rate': 0.02,
+#         'radius': 70,
+#         'reward_dist': -1,
+#         'range': (-np.pi, np.pi)
+#     }
 
-    def sched(x):
-        return dict(length=x, breaks=[(0.5, 0.6)], **trail_args)
+#     def sched(x):
+#         return dict(length=x, breaks=[(0.5, 0.6)], **trail_args)
     
-    return sched
+#     return sched
 
 
 Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
@@ -82,37 +79,8 @@ Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'tr
 
 if __name__ == '__main__':
     n_runs = 1
-    # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
-    sched = [
-        (10, [(0.5, 0.6)]),
-        (20, [(0.5, 0.6)]),
-        (30, [(0.5, 0.6)]),
-        (40, [(0.5, 0.6)]),
-        (50, [(0.5, 0.6)]),
-        (60, [(0.5, 0.6)]),
-        (60, [(0.5, 0.61)]),
-        (70, [(0.5, 0.6)]),
-        (70, [(0.5, 0.61)]),
-        (80, [(0.5, 0.6)]),
-        (80, [(0.5, 0.61)]),
-        (90, [(0.5, 0.6)]),
-        (90, [(0.5, 0.61)]),
-        (100, [(0.5, 0.6)]),
-        (110, [(0.5, 0.6)]),
-        (120, [(0.5, 0.6)]),
-        (120, [(0.5, 0.61)]),
-        (120, [(0.5, 0.62)]),
-        (120, [(0.5, 0.63)]),
-        (120, [(0.5, 0.64)]),
-        (120, [(0.5, 0.65)]),
-        (120, [(0.5, 0.66)]),
-        (120, [(0.5, 0.67)]),
-        (120, [(0.5, 0.68)]),
-        (120, [(0.5, 0.69)]),
-        (120, [(0.5, 0.7)]),
-    ]
-    # sched = to_sched(*zip(*sched))
-    sched = to_sched_cont()
+    lens = [5, 10, 15, 20]
+    sched = to_sched(lens)
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
@@ -120,17 +88,16 @@ if __name__ == '__main__':
     
     # TODO: should've jumped by now?
     cases = [
-        # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
+        Case('Incremental', IncrementalTeacher, {'goal_length': len(lens) - 1, 'sched': sched, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/inc_plume'}, []),
         # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
         # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
-        Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), # TODO: monitor probabilities (some seem impossible?)
+        # Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), 
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
             teacher = case.teacher(**case.teacher_params)
             model = make_model(env)
-            # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
             case.cb_params['save_path'] += f'/{i}'
             traj = run_session(model, teacher, eval_env, case.cb_params)
@@ -163,9 +130,10 @@ if __name__ == '__main__':
 
     fig.suptitle(f'Trail sched')
     fig.tight_layout()
-    plt.savefig('trained/osc_break_ii/0/tt_trajs.png')
+    plt.savefig('trained/inc_plume/0/tt_trajs.png')
 
 
+# '''
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 save_path = Path('trained/adp/0/')
 max_gen = 68
@@ -221,30 +189,17 @@ for i in tqdm(range(1, max_gen + 1)):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/osc_break_ii/0/gen172.zip')
+model_path = Path('trained/inc_plume/0/gen6.zip')
 
-# trail_args = {
-#     'length': 160,
-#     'width': 5,
-#     'diff_rate': 0.01,
-#     'radius': 100,
-#     'reward_dist': -1,
-#     'range': (-np.pi, np.pi),
-#     'breaks':[(0.5, 0.53)]
-# }
-trail_args = sched(120)
-
+trail_args = sched[-1]
 model = PPO.load(model_path, device='cpu')
-
-n_runs = 8
-headings = np.linspace(-np.pi, np.pi, num=n_runs)
 
 maps = []
 position_hists = []
 
 # print('preparing to generate headings')
-for heading in headings:
-    trail_map = MeanderTrail(**trail_args, heading=heading)
+for _ in range(8):
+    trail_map = PlumeTrail(**trail_args)
     env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
     obs = env.reset()
@@ -268,40 +223,6 @@ for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
 fig.suptitle('Sample of agent runs')
 fig.tight_layout()
 plt.savefig('tmp.png')
-# %%
-# TMP SINGLE PLOT
 
-model_path = Path('trained/osc_break_ii/0/gen172.zip')
-
-trail_args = sched(120)
-model = PPO.load(model_path, device='cpu')
-
-maps = []
-position_hists = []
-
-# print('preparing to generate headings')
-trail_map = MeanderTrail(**trail_args, heading=0)
-env = TrailEnv(trail_map, discrete=True, treadmill=True)
-
-obs = env.reset()
-for _ in range(200):
-    action, _ = model.predict(obs, deterministic=True)
-    obs, reward, is_done, _ = env.step(action)
-
-    if is_done:
-        break
-
-# print('gen heading')
-maps.append(trail_map)
-position_hists.append(env.agent.position_history)
-
-fig, axs = plt.subplots(1, 1, figsize=(8, 8))
-
-for ax, m, position_history in zip([axs], maps, position_hists):
-    m.plot(ax=ax, ymin=-70, ymax=130)
-    ax.plot(*zip(*position_history), linewidth=2, color='black')
-
-fig.suptitle('Sample run')
-fig.tight_layout()
-plt.savefig('sample_run.svg')
-# plt.savefig('tmp.png')
+# <codecell>
+'''

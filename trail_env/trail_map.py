@@ -15,8 +15,8 @@ def K_0(x): return _kn(0, x)
 
 class TrailMap:
     def __init__(self, start=None, end=None):
-        self.start = start if start != None else np.array([0, 0])
-        self.end = end if end != None else np.array([0, 0])
+        self.start = start if type(start) != type(None) else np.array([0, 0])
+        self.end = end if type(end) != type(None) else np.array([0, 0])
         self.tol = 3
 
     def sample(self, x, y):
@@ -379,24 +379,27 @@ class PlumeTrail(TrailMap):
         else:
             return np.random.poisson(rate) / self.base_rate  # TODO: or binary?
 
-    def plot(self):
-        x = np.linspace(-20, 20, 100)
-        y = np.linspace(-30, 10, 100)
+    def plot(self, ax=None):
+        x = np.linspace(-30, 30, 100)
+        y = np.linspace(-30, 30, 100)
         xx, yy = np.meshgrid(x, y)
 
         odors_contours = np.array([self.sample(px, py, return_rate=True) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
         odors_samples = np.array([self.sample(px, py, return_rate=False) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
 
-        plt.contourf(x, y, odors_samples)
-        plt.colorbar()
-
-        plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
+        if ax != None:
+            ax.contourf(x, y, odors_samples)
+            ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
+        else:
+            plt.contourf(x, y, odors_samples)
+            plt.colorbar()
+            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
 
     def reset(self):
         pass
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(wind_speed=2)  # TODO: debug with higher wind speeds
+    trail = PlumeTrail(wind_speed=1, end=np.array([0, 30]))  # TODO: debug with higher wind speeds
     trail.plot()
 # %%

@@ -94,8 +94,8 @@ class ManualTeacher:
 
 
 class Teacher:
-    def __init__(self, sched=None):
-        self.trail_class = MeanderTrail
+    def __init__(self, sched=None, trail_class=None):
+        self.trail_class = trail_class if trail_class != None else MeanderTrail
 
         self.sched_idx = 0
         if type(sched) == type(None):
@@ -188,8 +188,9 @@ class NaiveTeacher(Teacher):
 
 
 class IncrementalTeacher(Teacher):
-    def __init__(self, tau=0.95, **teacher_kwargs):
+    def __init__(self, goal_length, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
+        self.goal_length = goal_length
         self.prob_threshold = tau
     
     def _update_sched_idx(self):
@@ -197,7 +198,7 @@ class IncrementalTeacher(Teacher):
 
         if prob > self.prob_threshold:
             self.sched_idx += 1
-            if self.sched_idx == len(self.sched):
+            if self.sched_idx >= self.goal_length:
                 raise StopIteration
 
 
