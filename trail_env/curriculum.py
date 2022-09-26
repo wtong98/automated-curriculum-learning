@@ -62,6 +62,11 @@ class CurriculumCallback(BaseCallback):
                 self.model.save(str(self.save_path / f'gen{self.curr_gen}'))
 
         return True
+    
+    def _on_training_end(self) -> None:
+        if self.save_path:
+            self.model.save(str(self.save_path / 'gen_final'))
+
 
 
 class ManualTeacher:

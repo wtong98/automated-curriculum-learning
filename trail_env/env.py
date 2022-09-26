@@ -123,15 +123,16 @@ class TrailEnv(gym.Env):
 
 class TrailAgent:
     def __init__(self, trail_map, view_distance, is_egocentric=True, scale=1, y_adjust=0):
-        self.position = [0, 0]
-        self.heading = 0
         self.map = trail_map
         self.view_distance = view_distance
         self.is_egocentric = is_egocentric
         self.observation_scale = scale
         self.y_adjust = y_adjust
 
-        self.position_history = [[0, 0]]
+        self.position = trail_map.start.tolist()
+        self.heading = 0
+
+        self.position_history = [self.position[:]]
         self.odor_history = []
         self.off_trail_step = 0
 

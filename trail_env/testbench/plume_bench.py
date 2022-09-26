@@ -23,7 +23,7 @@ def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=1024,
                 batch_size=256,
-                ent_coef=0.1,
+                ent_coef=0.5,
                 gamma=0.98,
                 gae_lambda=0.9,
                 clip_range=0.2,
@@ -54,6 +54,7 @@ def make_break_sched(n=8, start_len=80, end_len=160, inc=0.025):
 def to_sched(lens):
     trail_args = {
         'start': np.array([0,0]),
+        'wind_speed': 1.9
     }
 
     sched = [dict(end=np.array([0, l]), **trail_args) for l in lens]
@@ -79,17 +80,16 @@ Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'tr
 
 if __name__ == '__main__':
     n_runs = 1
-    lens = [5, 10, 15, 20]
+    lens = [7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30]
     sched = to_sched(lens)
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
     
-    # TODO: should've jumped by now?
     cases = [
-        Case('Incremental', IncrementalTeacher, {'goal_length': len(lens) - 1, 'sched': sched, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/inc_plume'}, []),
-        # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
+        Case('Incremental', IncrementalTeacher, {'goal_length': len(lens) - 1, 'sched': sched, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/plume2'}, []),
+        # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/inc_plume'}, []),
         # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
         # Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), 
     ]
@@ -132,11 +132,11 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.savefig('trained/inc_plume/0/tt_trajs.png')
 
-
 # '''
+
 # %%  SHOWCASE PERFORMANCE IN PLOTS
-save_path = Path('trained/adp/0/')
-max_gen = 68
+save_path = Path('trained/plume2/0/')
+max_gen = 15
 
 # trail_args = {
 #     'length': 80,
@@ -146,22 +146,19 @@ max_gen = 68
 #     'reward_dist': -1,
 #     'range': (-np.pi, np.pi)
 # }
-trail_args = sched(120)
+trail_args = sched[-1]
 
-for i in tqdm(range(1, max_gen + 1)):
+for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
     model_path = save_path / f'gen{i}'
     # print('loading model')
     model = PPO.load(model_path, device='cpu')
-
-    n_runs = 8
-    headings = np.linspace(-np.pi, np.pi, num=n_runs)
 
     maps = []
     position_hists = []
 
     # print('preparing to generate headings')
-    for heading in headings:
-        trail_map = MeanderTrail(**trail_args, heading=heading)
+    for _ in range(8):
+        trail_map = PlumeTrail(**trail_args)
         env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
         obs = env.reset()
@@ -189,7 +186,7 @@ for i in tqdm(range(1, max_gen + 1)):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/inc_plume/0/gen6.zip')
+model_path = Path('trained/plume2/0/gen_final.zip')
 
 trail_args = sched[-1]
 model = PPO.load(model_path, device='cpu')

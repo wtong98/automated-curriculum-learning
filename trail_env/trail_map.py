@@ -346,11 +346,17 @@ class BrokenMeanderTrail(MeanderTrail):
 # NOTE: wind speed fixed along direction of negative y axis
 class PlumeTrail(TrailMap):
     def __init__(self, start=None, end=None,
+                 jitter_x=10,
                  diffusivity=1,
                  emission_rate=0.5,
                  particle_lifetime=150,
                  wind_speed=1,
                  sensor_size=1):
+        
+        if jitter_x:
+            start_x = np.random.uniform(-jitter_x, jitter_x)
+            start = np.array([start_x, 0])
+
         super().__init__(start, end)
 
         self.D = diffusivity
@@ -384,13 +390,16 @@ class PlumeTrail(TrailMap):
         y = np.linspace(-30, 30, 100)
         xx, yy = np.meshgrid(x, y)
 
+
         odors_contours = np.array([self.sample(px, py, return_rate=True) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
         odors_samples = np.array([self.sample(px, py, return_rate=False) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
 
         if ax != None:
+            ax.plot(*self.start, marker='o', markersize=10, color='blue')
             ax.contourf(x, y, odors_samples)
             ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
         else:
+            plt.plot(*self.start, marker='o', markersize=10, color='blue')
             plt.contourf(x, y, odors_samples)
             plt.colorbar()
             plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
@@ -400,6 +409,6 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(wind_speed=1, end=np.array([0, 30]))  # TODO: debug with higher wind speeds
+    trail = PlumeTrail(wind_speed=1.9, end=np.array([0, 30]))  # TODO: debug with higher wind speeds
     trail.plot()
 # %%
