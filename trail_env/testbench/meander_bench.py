@@ -4,6 +4,8 @@ Benchmark performance of various teacher strategies
 author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
+import pickle
+
 from collections import namedtuple
 import matplotlib.pyplot as plt
 import numpy as np
@@ -274,34 +276,60 @@ plt.savefig('tmp.png')
 model_path = Path('trained/osc_break_ii/0/gen172.zip')
 
 trail_args = sched(120)
+trail_args['length'] = 500
+trail_args['breaks'] = []
+
 model = PPO.load(model_path, device='cpu')
 
-maps = []
-position_hists = []
+for i in tqdm(range(10)):
+    path = Path(f'sample/{i}')
+    path.mkdir(exist_ok=True, parents=True)
 
-# print('preparing to generate headings')
-trail_map = MeanderTrail(**trail_args, heading=0)
-env = TrailEnv(trail_map, discrete=True, treadmill=True)
+    maps = []
+    position_hists = []
 
-obs = env.reset()
-for _ in range(200):
-    action, _ = model.predict(obs, deterministic=True)
-    obs, reward, is_done, _ = env.step(action)
+    # print('preparing to generate headings')
+    trail_map = MeanderTrail(**trail_args, heading=0)
+    trail_map.max_steps = 1000
 
-    if is_done:
-        break
+    env = TrailEnv(trail_map, discrete=True, treadmill=True)
+    
 
-# print('gen heading')
-maps.append(trail_map)
-position_hists.append(env.agent.position_history)
+    obs = env.reset()
+    while True:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, is_done, _ = env.step(action)
 
-fig, axs = plt.subplots(1, 1, figsize=(8, 8))
+        if is_done:
+            break
 
-for ax, m, position_history in zip([axs], maps, position_hists):
-    m.plot(ax=ax, ymin=-70, ymax=130)
-    ax.plot(*zip(*position_history), linewidth=2, color='black')
+    # print('gen heading')
+    maps.append(trail_map)
+    position_hists.append(np.array(env.agent.position_history))
 
-fig.suptitle('Sample run')
-fig.tight_layout()
-plt.savefig('sample_run.svg')
-# plt.savefig('tmp.png')
+    fig, axs = plt.subplots(1, 1, figsize=(6, 12))
+
+    for ax, m, p_hist in zip([axs], maps, position_hists):
+        y_min = np.min(m.y_coords)
+        y_max = np.max(m.y_coords)
+
+        x_min = np.min(m.x_coords)
+        x_max = np.max(m.x_coords)
+
+        m.plot(ax=ax, xmin=x_min-20, xmax=x_max+20, ymin=y_min - 20, ymax=y_max + 20)
+        ax.plot(p_hist[:,0], p_hist[:,1], linewidth=2, color='black')
+
+    ratio = (y_max - y_min + 40) / (x_max - x_min + 40)
+    height = 6 * ratio
+
+    fig.set_size_inches((6, height))
+    fig.tight_layout()
+
+    plt.savefig(str(path / f'plot_{i}.png'))
+    np.save(str(path / f'positions_{i}.npy'), p_hist)
+    with (path / f'map_{i}.pkl').open('wb') as fp:
+        pickle.dump(m, fp)
+    
+    plt.clf()
+
+# %%

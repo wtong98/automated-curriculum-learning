@@ -8,9 +8,7 @@ author: William Tong
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.special import kn as _kn
-
-def K_0(x): return _kn(0, x)
+from scipy.special import lambertw
 
 
 class TrailMap:
@@ -53,18 +51,8 @@ class StraightTrail(TrailMap):
         odor = max_odor - total_dist
         odor *= 1 / (perp_dist + 1) ** self.narrow_factor
 
-        # odor = 1 / (perp_dist + 1) ** self.narrow_factor
-        # max_dist = np.sqrt(np.sum((self.end - self.start) ** 2))
-        # if np.isscalar(total_dist):
-        #     if total_dist > max_dist:
-        #         odor *= 1 / (total_dist - max_dist + 1) ** self.narrow_factor
-        # else:
-        #     adjust = 1 / (np.clip(total_dist - max_dist, 0, np.inf) + 1) ** self.narrow_factor
-        #     odor *= adjust
-
         odor = np.clip(odor, 0, np.inf)
         return odor / max_odor
-        return odor
 
     def plot(self, ax=None):
         x = np.linspace(-20, 20, 100)
@@ -345,70 +333,110 @@ class BrokenMeanderTrail(MeanderTrail):
 
 # NOTE: wind speed fixed along direction of negative y axis
 class PlumeTrail(TrailMap):
-    def __init__(self, start=None, end=None,
-                 jitter_x=10,
+    def __init__(self, start=None,
+                 start_rate=None,
                  diffusivity=1,
-                 emission_rate=0.5,
+                 emission_rate=1,
                  particle_lifetime=150,
                  wind_speed=1,
-                 sensor_size=1):
+                 sensor_size=1,
+                 length_scale=10,
+                 max_steps=200):
         
-        if jitter_x:
-            start_x = np.random.uniform(-jitter_x, jitter_x)
-            start = np.array([start_x, 0])
-
-        super().__init__(start, end)
-
-        self.D = diffusivity
+        self.D = diffusivity * length_scale ** 2
         self.R = emission_rate
         self.tau = particle_lifetime
-        self.V = wind_speed
-        self.a = sensor_size
+        self.V = wind_speed * length_scale
+        self.a = sensor_size * length_scale
 
         self.scale = np.sqrt((self.D * self.tau) / (1 + (self.V ** 2 * self.tau) / (4 * self.D)))
+        self.base_rate = self.a * self.R
 
-        self.rate_denom = np.log(self.scale / self.a)
-        if self.scale < self.a:
-            print('warn: sensor size is larger than scale, truncating rate')
-            self.rate_denom = 1e-8
+        if start_rate:
+            self.y_max, self.y_min = np.real(self._compute_y(start_rate))
+            start = self._sample_point(start_rate)
+            self.start_rate = start_rate
+        super().__init__(start, end=np.array((0,0)))
 
-        self.base_rate = self.R / self.rate_denom
+        if max_steps == 'auto':
+            assert start_rate != None
+            self.max_steps = np.round(4 * - self.y_min)
+        else:
+            self.max_steps = max_steps
+    
+
+    # TODO: sample uniformly across whole level set
+    def _sample_point(self, rate):
+        y = np.random.uniform(self.y_min, self.y_max)
+        dist = np.real(self._compute_dist(rate, y))
+        x = np.sqrt(dist ** 2 - y ** 2)
+
+        if np.random.uniform() > 0.5:
+            return np.array((x, y))
+        else:
+            return np.array((-x, y))
+
+    def _compute_dist(self, rate, y):
+        arg = self.base_rate / (self.scale * rate) * np.exp(-(y * self.V) / (2 * self.D))
+        val = self.scale * lambertw(arg)
+        return val
+    
+    def _compute_y(self, rate):
+        fac_plus = (1 / self.scale) + self.V / (2 * self.D)
+        fac_minus = (1 / self.scale) - self.V / (2 * self.D)
+
+        y_plus = lambertw(fac_plus * self.base_rate / rate) / fac_plus
+        y_minus = lambertw(fac_minus * self.base_rate / rate) / fac_minus
+        return y_plus, -y_minus
 
 
     def sample(self, x, y, return_rate=False):
-        wind_factor = np.exp((self.end[1] - y) * self.V / 2 * self.D)
-        dist_factor = K_0(np.linalg.norm(self.end - [x, y]) / self.scale)
-        rate = self.base_rate * wind_factor * dist_factor
+        dist = np.linalg.norm(self.end - [x, y]) 
+        dist_factor = np.exp(- dist / self.scale)
+        wind_factor = np.exp(-(y - self.end[1]) * self.V / (2 * self.D))
+        rate = (self.base_rate / dist) * wind_factor * dist_factor
+
+        # print('DIST', dist)
+        # print('DIST_FAC', dist_factor)
+        # print('WIND', wind_factor)
+        # print('RATE', rate)
 
         if return_rate:
             return rate
         else:
             return np.random.poisson(rate) / self.base_rate  # TODO: or binary?
 
-    def plot(self, ax=None):
-        x = np.linspace(-30, 30, 100)
-        y = np.linspace(-30, 30, 100)
+    def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-50, 10)):
+        x = np.linspace(*x_lim, 100)
+        y = np.linspace(*y_lim, 100)
         xx, yy = np.meshgrid(x, y)
-
 
         odors_contours = np.array([self.sample(px, py, return_rate=True) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
         odors_samples = np.array([self.sample(px, py, return_rate=False) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
 
+        lvls = np.arange(0, 1, 0.05)
         if ax != None:
             ax.plot(*self.start, marker='o', markersize=10, color='blue')
-            ax.contourf(x, y, odors_samples)
-            ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
+            ax.contourf(x, y, odors_samples, levels=lvls)
+            ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
         else:
             plt.plot(*self.start, marker='o', markersize=10, color='blue')
-            plt.contourf(x, y, odors_samples)
+            plt.contourf(x, y, odors_samples, levels=lvls)
             plt.colorbar()
-            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5)
+            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
     def reset(self):
-        pass
+        if self.start_rate != None:
+            self.start = self._sample_point(self.start_rate)
+    
+    def __str__(self) -> str:
+        return f'PlumeTrail(start={self.start}  rate={self.start_rate})'
+    
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(wind_speed=1.9, end=np.array([0, 30]))  # TODO: debug with higher wind speeds
+    trail = PlumeTrail(wind_speed=5, start_rate=1.1, length_scale=20, max_steps='auto')
     trail.plot()
 # %%

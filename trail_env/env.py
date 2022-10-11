@@ -93,7 +93,12 @@ class TrailEnv(gym.Env):
         obs = self.agent.make_observation()
         reward, is_done, is_success = self.agent.get_reward()
 
-        if self.curr_step == TrailEnv.max_steps:
+        if hasattr(self.map, 'max_steps'):
+            max_steps = self.map.max_steps
+        else:
+            max_steps = TrailEnv.max_steps
+
+        if self.curr_step == max_steps:
             is_done = True
 
         self.curr_step += 1
@@ -106,8 +111,10 @@ class TrailEnv(gym.Env):
     def reset(self):
         self.curr_step = 0
         if self.next_map != None:
-            print('SWITCHING TO MAP:', self.next_map)
             self.map = self.next_map
+            self.map.reset()   # NOTE: resample map parameters
+            print('SWITCHING TO MAP:', self.map)
+
             self.next_map = None
             self.history = []
         else:
