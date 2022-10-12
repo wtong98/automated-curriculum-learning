@@ -3,6 +3,7 @@ fig/
 *.pkl
 *.png
 *.svg
+*.zip
 log/
 trained/
 sample/

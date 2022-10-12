@@ -1032,9 +1032,6 @@ class TeacherMctsCont(Agent):
         self.iter += 1
 
         if prev_action != None and type(qr) != None:
-            print('HIST SIZE', sys.getsizeof(self.history))
-            print('TREE SIZE', sys.getsizeof(self.tree))
-
             qr = self._round(qr)
             self.history += (prev_action, tuple(self._round(qr)))
             if self.history not in self.tree:
@@ -1238,20 +1235,6 @@ def _mcts_search(params):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 vals = exp_val + explore_factor * np.sqrt(np.log(np.sum(visits)) / visits)
-
-            # print('NEXT N', all_next_nodes)
-            # print('VISITS', visits)
-            # print('VALS', vals)
-
-            # for a in actions:
-            #     curr_node = tree[history]
-            #     next_node = tree[history + (a,)]
-            #     if curr_node['n'] > 0 and next_node['n'] > 0:
-            #         explore = explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
-            #     else:
-            #         explore = 9999  # arbitrarily high
-
-            #     vals.append(next_node['v'] + explore)
 
             a = actions[np.argmax(vals)]
             state = history[-1]
