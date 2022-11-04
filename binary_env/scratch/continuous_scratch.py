@@ -95,6 +95,7 @@ class TeacherUncertainOsc(Agent):
         return 1 - prob_bad
 
 
+# TODO: clean up and work out rigorous tuning
 class TeacherAdaptive(Agent):
     def __init__(self, goal_length, threshold=0.95, threshold_low=0.05, tau=0.5, conf=0.95, max_m_factor=3, abs_min_m=5, cut_factor=2, student=None, with_osc=False) -> None:
         super().__init__()
@@ -112,18 +113,17 @@ class TeacherAdaptive(Agent):
         self.max_m = self.min_m * max_m_factor
 
         self.cut_factor = cut_factor
-        self.prop_inc = goal_length // cut_factor
+        # self.prop_inc = goal_length // cut_factor
+        self.prop_inc = 100
         self.inc = None
-        # self.inc = 100
         self.transcript = []
         self.in_osc = False
     
-    # TODO: clean up and simplify
     def next_action(self, state):
         curr_n, trans = state
         if self.in_osc:
             self.in_osc = False
-            return curr_n + self.inc
+            return int(curr_n + self.inc)
         else:
             self.transcript.extend(trans)
 
@@ -132,17 +132,17 @@ class TeacherAdaptive(Agent):
                 if len(self.transcript) > self.min_m:
                     if self.do_jump():
                         next_n = min(curr_n + self.inc, self.goal_length)
-                        return next_n
+                        return int(next_n)
                     elif self.do_dive():
                         next_n //= self.cut_factor
                         self.inc = max(self.inc // 2, 1)
-                        return next_n
+                        return int(next_n)
 
                 if self.with_osc:
                     self.in_osc = True
-                    return curr_n - self.inc
+                    return int(curr_n - self.inc)
 
-                return next_n
+                return int(next_n)
 
             elif len(self.transcript) > (self.min_m + self.max_m) // 2:   # binary search
                 next_n = self.prop_inc
@@ -156,9 +156,9 @@ class TeacherAdaptive(Agent):
                     next_n = self.prop_inc
                     self.transcript = []
 
-                return next_n
+                return int(next_n)
             
-            return self.prop_inc
+            return int(self.prop_inc)
             
     def do_jump(self, trans=None, thresh=None):
         trans = self.transcript if trans == None else trans
@@ -414,7 +414,7 @@ n_iters = 3
 T = 5
 lr = 0.1
 max_steps = 1000
-cut_factor = 2
+cut_factor = 1.5
 
 N_eff = 10
 eps_eff = 0
@@ -424,10 +424,10 @@ N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Incremental (PK)', run_incremental_perfect, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8}, []),
     # Case('Adaptive (BT)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': False}, []),
-    Case('MCTS', run_mcts, {'eps_eff': eps_eff, 'goal_length': N_eff, 'lr': lr, 'gamma': 0.97, 'n_jobs': 48, 'n_iters': 100, 'pw_init': 10}, []),
-    # Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
+    # Case('MCTS', run_mcts, {'eps_eff': eps_eff, 'goal_length': N_eff, 'lr': lr, 'gamma': 0.97, 'n_jobs': 48, 'n_iters': 100, 'pw_init': 10}, []),
+    Case('Adaptive (Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
     # Case('Adaptive (BT + Osc)', run_adaptive, {'eps': eps, 'goal_length': N, 'lr': lr, 'threshold': 0.8, 'threshold_low': 0.2, 'tau':0.8, 'cut_factor': cut_factor, 'with_osc': True}, []),
 ]
 

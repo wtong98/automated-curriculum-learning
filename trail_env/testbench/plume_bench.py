@@ -133,7 +133,7 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.savefig('trained/inc_plume/0/tt_trajs.png')
 
-'''
+# '''
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 # TODO: mark odor along trajectory of agent
@@ -200,9 +200,9 @@ for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/plume_rate/0/gen_final.zip')
+model_path = Path('trained/plume_rate/0/gen30.zip')
 
-trail_args = sched[-3]
+trail_args = sched[-6]
 # trail_args['start_y'] = -40
 model = PPO.load(model_path, device='cpu')
 
@@ -211,7 +211,7 @@ position_hists = []
 odor_hists = []
 
 # print('preparing to generate headings')
-for _ in range(8):
+for _ in range(1):
     trail_map = PlumeTrail(**trail_args)
     env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
@@ -228,8 +228,10 @@ for _ in range(8):
     position_hists.append(env.agent.position_history)
     odor_hists.append(env.agent.odor_history)
 
-fig, axs = plt.subplots(2, 4, figsize=(16, 8))
+# fig, axs = plt.subplots(2, 4, figsize=(16, 8))
 # fig, axs = plt.subplots(1, 2, figsize=(16, 8))
+fig, axs = plt.subplots(1, 1)
+axs = np.array([axs])
 
 for ax, m, position_history, odor_history in zip(axs.ravel(), maps, position_hists, odor_hists):
     hist = np.array(position_history)
@@ -244,11 +246,16 @@ for ax, m, position_history, odor_history in zip(axs.ravel(), maps, position_his
 
     m.plot(ax=ax, x_lim=(x_min, x_max), y_lim=(y_min, y_max))
     ax.plot(*zip(*position_history), linewidth=2, color='black')
-    mpb = ax.scatter(odor_hist[:,1], odor_hist[:,2], c=odor_hist[:,0], cmap='summer', s=30, vmin=0, vmax=1)
+    # mpb = ax.scatter(odor_hist[:,1], odor_hist[:,2], c=odor_hist[:,0], cmap='summer', s=30, vmin=0, vmax=1)
     # fig.colorbar(mpb, ax=ax)
 
-fig.suptitle('Sample of agent runs')
+width = 6
+ratio = (y_max - y_min) / (x_max - x_min)
+
+fig.set_size_inches(width, ratio*width)
+# fig.suptitle('Sample of agent runs')
 fig.tight_layout()
+plt.savefig('sample_plume.svg')
 # plt.savefig('start_y_40.png')
 
 # <codecell>

@@ -239,12 +239,12 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
 
 # <codecell>
 n_iters = 5
-T = 5
-N = 3
-lr = 0.01
+T = 3
+N = 5
+lr = 0.1
 max_steps = 10000
 bins = 10
-eps = -4
+eps = 0
 conf=0.2
 
 mc_iters = 1000
@@ -253,45 +253,47 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
     Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
-    # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
+    Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
     for case in cases:
         case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
 # %%
-fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+fig, axs = plt.subplots(1, 1, figsize=(6, 4))
+axs = [axs]
 
 for i, case in enumerate(cases):
     label = {'label': case.name}
-    for run in case.runs:
-        axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
+    for run in case.runs[:1]:
+        axs[0].plot(np.arange(len(run)) + i * 0.1, run, color=f'C{i}', alpha=0.8, linewidth=2, **label)
         label = {}
 
 axs[0].legend()
 axs[0].set_xlabel('Iteration')
 axs[0].set_ylabel('N')
-axs[0].set_yticks(np.arange(N) + 1)
+axs[0].set_yticks([1, 2, 3])
 
-axs[0].set_xlim((100, 200))
+# all_lens = [[len(run) for run in case.runs] for case in cases]
+# all_means = [np.mean(lens) for lens in all_lens]
+# all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+# all_names = [case.name for case in cases]
 
-all_lens = [[len(run) for run in case.runs] for case in cases]
-all_means = [np.mean(lens) for lens in all_lens]
-all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
-all_names = [case.name for case in cases]
+# axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
+# axs[1].set_ylabel('Iterations')
 
-axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-axs[1].set_ylabel('Iterations')
+# fig.suptitle(f'Epsilon = {eps}')
+# fig.tight_layout()
 
-fig.suptitle(f'Epsilon = {eps}')
-fig.tight_layout()
-plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
+# plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
 
 # %% LONG COMPARISON PLOT
@@ -304,7 +306,7 @@ gamma = 0.9
 conf = 0.2
 bt_conf = 0.2
 bt_tau = 0.05
-eps = np.arange(-2, 2.1, step=0.5)
+eps = np.arange(-3, 2.1, step=0.5)
 # eps = np.arange(-4, -1, step=0.5)
 # eps = np.arange(-7, -3, step=0.5)
 
@@ -316,11 +318,12 @@ Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 all_cases = [
     (
         Case('Incremental', run_incremental, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
+        # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': e, 'goal_length': N, 'lr': lr}, []),
         # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': e, 'goal_length': N, 'lr': lr}, []),
-        Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
-        Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
-        Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr, 'gamma': gamma}, []),
+        # Case('Uncertain Osc', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
+        # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
+        Case('Oscillator', run_osc, {'eps': e, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': bt_conf, 'bt_tau': bt_tau}, []),
+        # Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'lr': lr, 'gamma': gamma}, []),
         # Case('MCTS', run_mcts, {'eps': e, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters, 'gamma': gamma}, []),
         # Case('DP', run_dp, {'eps': e, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
     ) for e in eps
@@ -349,20 +352,22 @@ for case_set in cases:
     all_ses.append(curr_ses)
 
 
-width = 0.15
-offset = np.array([-2, -1, 0, 1, 2])
+width = 0.27
+# offset = np.array([-2, -1, 0, 1, 2])
 # offset = np.array([-1, 0, 1])
-# offset = np.array([-1, 0])
+offset = np.array([-1, 0])
 x = np.arange(len(eps))
+names = ['Incremental', 'Oscillator']
 # names = ['Incremental', 'Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Incremental (w/ PBT)', 'Osc (w/ BT)']
-names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
+# names = ['Incremental', 'Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc (w/ BT)', 'POMCP']
 # names = ['Incremental (w/ BT)', 'Osc', 'Osc (w/ BT)']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc']
 # names = ['Incremental (w/ BT)', 'Uncertain Osc (w/ BT)']
 
 # plt.yscale('log')
+plt.gcf().set_size_inches(4, 2.8)
 
 for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.bar(x+off, mean, yerr=se, width=width, label=name)
@@ -370,9 +375,12 @@ for name, off, mean, se in zip(names, width * offset, all_means, all_ses):
     plt.xlabel('Epsilon')
     plt.ylabel('Iterations')
 
+plt.yscale('log')
 plt.legend()
-plt.title(f'Teacher performance for N={N}')
-plt.tight_layout()
 
-plt.savefig(f'../fig/osc_perf_n_{N}_pomcp_est.png')
+# plt.title(f'Teacher performance for N={N}')
+plt.tight_layout()
+# plt.gcf().subplots_adjust(bottom=0.15)
+
+plt.savefig(f'../fig/osc_perf_n_{N}.svg')
 # %%
