@@ -86,6 +86,39 @@ class TeacherUncertainOsc(Agent):
         total = len(transcript)
         prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
         return 1 - prob_bad
+
+
+class TeacherExpAdaptive(Agent):
+    def __init__(self, goal_length, discount=0.9):
+        self.goal_length = goal_length
+        self.discount = discount
+        self.avgs = []
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self._consume_trans(trans)
+
+        if len(self.avgs) == 1:
+            return 1
+        
+        avg, last_avg = self.avgs[-1], self.avgs[-2]
+
+        if avg > 0.8:
+            if avg > last_avg:
+                return min(curr_n + 1, self.goal_length)
+            else:
+                return max(curr_n - 1, 1)
+        else:
+            if avg > last_avg:
+                return curr_n
+            else:
+                return max(curr_n - 1, 1)
+    
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
         
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
@@ -134,6 +167,24 @@ def run_incremental_with_partial_bt(eps=0, goal_length=3, T=3, max_steps=1000, l
 
 def run_osc(eps=0, confidence=0.75, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
     teacher = TeacherUncertainOsc(goal_length, conf=confidence, **teacher_kwargs)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj
+
+
+def run_adp_exp(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
+    teacher = TeacherExpAdaptive(goal_length, **teacher_kwargs)
     env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     traj = [env.N]
     env.reset()
@@ -244,7 +295,7 @@ N = 5
 lr = 0.1
 max_steps = 10000
 bins = 10
-eps = 0
+eps = -3
 conf=0.2
 
 mc_iters = 1000
@@ -252,29 +303,28 @@ mc_iters = 1000
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
 cases = [
-    Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
     # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
-    Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
+    # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
 
 for _ in tqdm(range(n_iters)):
     for case in cases:
         case.runs.append(case.run_func(**case.run_params, max_steps=max_steps, T=T))
 # %%
-# fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-fig, axs = plt.subplots(1, 1, figsize=(6, 4))
-axs = [axs]
+fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
 for i, case in enumerate(cases):
     label = {'label': case.name}
-    for run in case.runs[:1]:
-        axs[0].plot(np.arange(len(run)) + i * 0.1, run, color=f'C{i}', alpha=0.8, linewidth=2, **label)
+    for run in case.runs:
+        axs[0].plot(np.arange(len(run)) + i * 0.1, run, color=f'C{i}', alpha=0.8, linewidth=1, **label)
         label = {}
 
 axs[0].legend()
@@ -282,16 +332,16 @@ axs[0].set_xlabel('Iteration')
 axs[0].set_ylabel('N')
 axs[0].set_yticks([1, 2, 3])
 
-# all_lens = [[len(run) for run in case.runs] for case in cases]
-# all_means = [np.mean(lens) for lens in all_lens]
-# all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
-# all_names = [case.name for case in cases]
+all_lens = [[len(run) for run in case.runs] for case in cases]
+all_means = [np.mean(lens) for lens in all_lens]
+all_serr = [2 * np.std(lens) / np.sqrt(n_iters) for lens in all_lens]
+all_names = [case.name for case in cases]
 
-# axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-# axs[1].set_ylabel('Iterations')
+axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
+axs[1].set_ylabel('Iterations')
 
-# fig.suptitle(f'Epsilon = {eps}')
-# fig.tight_layout()
+fig.suptitle(f'Epsilon = {eps}')
+fig.tight_layout()
 
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
