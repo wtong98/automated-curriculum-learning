@@ -343,6 +343,8 @@ axs[1].set_ylabel('Iterations')
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
 
+axs[0].set_xlim((0, 30))
+
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
 

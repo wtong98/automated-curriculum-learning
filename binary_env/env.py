@@ -207,8 +207,9 @@ class Student(Agent):
 
         if is_done:
             # NOTE: removed for simplification <-- does it actually help?
-            # if reward == 0 and len(self.buffer) >= self.n_step:   # account for "updated" q_e
-            #     self.buffer = self.buffer[1:]
+            # NOTE: confirm still works for discrete case v
+            if reward == 0 and len(self.buffer) >= self.n_step:   # account for "updated" q_e
+                self.buffer = self.buffer[1:]
 
             for state in self.buffer:
                 self.q_r[state] += self.lr * (reward - self.q_r[state])

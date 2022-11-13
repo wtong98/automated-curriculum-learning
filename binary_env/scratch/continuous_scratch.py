@@ -227,57 +227,6 @@ class TeacherExpAdaptive(Agent):
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
 
-# class TeacherAdaptive(Agent):
-#     def __init__(self, goal_length, prop_inc=100, tau=0.5, tau_low=0.1, conf=0.95, max_m_factor=3, abs_min_m=5) -> None:
-#         super().__init__()
-#         self.goal_length = goal_length
-#         self.tau_low = tau_low
-#         self.tau = tau
-#         self.conf = conf
-
-#         p_eps = -np.log(tau)
-#         raw_min_m = int(np.round(np.log(1 - conf) / (-p_eps) - 1))
-#         self.min_m = max(raw_min_m, abs_min_m)
-#         self.max_m = self.min_m * max_m_factor
-
-#         self.cut_factor = cut_factor
-#         self.inc = prop_inc
-#         self.transcript = []
-#         self.in_osc = False
-    
-#     def next_action(self, state):
-#         curr_n, trans = state
-#         self.transcript.extend(trans)
-
-#         if self.in_osc:
-#             self.in_osc = False
-#             return curr_n + self.inc
-        
-#         # TODO: incomplete
-
-
-#     def do_jump(self, trans=None, thresh=None):
-#         trans = self.transcript if trans == None else trans
-#         for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
-#             prob_good = self._get_prob_good(trans[-k:], thresh=thresh)
-#             if prob_good >= self.conf:
-#                 return True
-
-#         return False
-
-#     def do_dive(self):
-#         rev_trans = [not bit for bit in self.transcript]
-#         return self.do_jump(rev_trans, 1 - self.threshold_low)
-
-#     def _get_prob_good(self, transcript, thresh=None):
-#         if thresh == None:
-#             thresh = self.threshold
-
-#         success = np.sum(transcript)
-#         total = len(transcript)
-#         prob_bad = beta.cdf(thresh, a=success+1, b=total-success+1)
-#         return 1 - prob_bad
-
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, n_step=1, inc=1):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
