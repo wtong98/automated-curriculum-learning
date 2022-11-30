@@ -3,7 +3,11 @@ Finding optimal strategies for adaptive
 """
 
 # <codecell>
+from itertools import product
+from multiprocessing import Pool
+
 import numpy as np
+from scipy.optimize import differential_evolution
 
 import sys
 sys.path.append('../')
@@ -44,26 +48,42 @@ class TeacherTree:
 
 # tree = TeacherTree(splits=np.array([0.1, 0.2, 0.3, 0.4]), decisions=np.array(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']), n_feats=2, n_splits=3)
 # tree.decide([0.3, 0.35])
+
+
 class TeacherExpAdaptive(Agent):
-    def __init__(self, goal_length, tree, prop_inc=100, discount=0.9):
+    def __init__(self, goal_length, tree, dec_to_idx, prop_inc=100, shrink_factor=0.65, grow_factor=1.5, discount=0.9):
         self.goal_length = goal_length
         self.tree = tree
+        self.dec_to_idx = dec_to_idx
         self.inc = prop_inc
+        self.shrink_factor = shrink_factor
+        self.grow_factor = grow_factor
         self.discount = discount
         self.avgs = []
+    
+    def idx_to_act(self, idx):
+        inc_idx = idx // 3
+        jump_idx = idx % 3
 
-    def dec_to_inc(self, dec, curr_n):
-        if dec == 0:
-            return max(curr_n - self.inc, 1)
-        elif dec == 1:
-            return curr_n
-        elif dec == 2:
-            return max(curr_n - self.inc, 1)
-        elif dec == 3:
-            return min(curr_n + self.inc, self.goal_length)
+        if inc_idx == 1:
+            self.inc *= self.shrink_factor
+        elif inc_idx == 2:
+            self.inc *= self.grow_factor
+            
+        if jump_idx == 0:
+            return -self.inc
+        elif jump_idx == 1:
+            return 0
+        elif jump_idx == 2:
+            return self.inc
         
         return None
-        
+
+
+    def dec_to_inc(self, dec, curr_n):
+        idx = self.dec_to_idx[dec]
+        act = self.idx_to_act(idx)
+        return np.clip(act + curr_n, 1, self.goal_length).astype(int)
     
     def next_action(self, state):
         curr_n, trans = state
@@ -82,52 +102,9 @@ class TeacherExpAdaptive(Agent):
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
 
-class TeacherExpAdaptiveOG(Agent):
-    def __init__(self, goal_length, prop_inc=100, discount=0.9):
-        self.goal_length = goal_length
-        self.inc = prop_inc
-        self.discount = discount
-        self.avgs = []
-    
-    def next_action(self, state):
-        curr_n, trans = state
-        self._consume_trans(trans)
-
-        if len(self.avgs) == 1:
-            return self.inc
-        
-        avg, last_avg = self.avgs[-1], self.avgs[-2]
-
-        if avg > 0.8:
-            if avg > last_avg:
-                return min(curr_n + self.inc, self.goal_length)
-            else:
-                return max(curr_n - self.inc, 1)
-        else:
-            if avg > last_avg:
-                return curr_n
-            else:
-                return max(curr_n - self.inc, 1)
-
-        # TODO: need some measure of momentum / stability
-        # inc = 10 * (avg - last_avg) * self.inc
-        # return np.clip(curr_n + inc, 1, self.goal_length).astype(int)
-
-        # if avg > last_avg:
-        #     return min(curr_n + self.inc, self.goal_length)
-        # elif avg < last_avg:
-        #     return max(curr_n - self.inc, 1)
-        # else:
-        #     return curr_n
-    
-    def _consume_trans(self, trans):
-        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
-        for x in trans:
-            avg = (1 - self.discount) * x + self.discount * avg
-        self.avgs.append(avg)
 
 
-# N_eff = 3
+# N_eff = 10
 # eps_eff = 0
 # T = 5
 # lr = 0.1
@@ -135,19 +112,23 @@ class TeacherExpAdaptiveOG(Agent):
 
 # N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
 
-# tree = TeacherTree(splits=np.array([0.8, 0]))
+# # tree = TeacherTree(splits=np.array([0.21, 0.012]))
+# tree = TeacherTree(splits=np.array([0.85, 0]))
 
-# teacher = TeacherExpAdaptiveOG(N)
-# # teacher = TeacherExpAdaptive(N, tree)
+# # teacher = TeacherExpAdaptiveOG(N)
+# teacher = TeacherExpAdaptive(N, tree, [0, 1, 0, 2])
 # env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True)
 # traj = [env.N]
 # env.reset()
 
 # obs = (1, [])
-# for _ in range(max_steps):
+# for i in range(max_steps):
 #     action = teacher.next_action(obs)
 #     obs, _, is_done, _ = env.step(action)
 #     traj.append(env.N)
+
+#     # if i % 10 == 0:
+#     #     print(f'{i}: {env.student.score(goal_state=N)}')
 
 
 #     if is_done:
@@ -156,7 +137,7 @@ class TeacherExpAdaptiveOG(Agent):
 # plt.plot(traj)
 
 
-def run(splits, N_eff=10, eps_eff=0, n_iters=5, max_steps=300):
+def run(splits, dec_to_idx, N_eff=10, eps_eff=0, n_iters=5, max_steps=200):
     N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
     T = 5
     lr = 0.1
@@ -164,7 +145,7 @@ def run(splits, N_eff=10, eps_eff=0, n_iters=5, max_steps=300):
 
     for _ in range(n_iters):
         tree = TeacherTree(splits)
-        teacher = TeacherExpAdaptive(N, tree)
+        teacher = TeacherExpAdaptive(N, tree, dec_to_idx)
 
         env = UncertainCurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True)
         traj = [env.N]
@@ -181,7 +162,87 @@ def run(splits, N_eff=10, eps_eff=0, n_iters=5, max_steps=300):
 
         results.append(len(traj))
     
-    return results
+    return np.mean(results)
 
-r = run(np.array([0.8, 0]))
-print(np.mean(r))
+
+def search_params(init_dec_map=None, **kwargs):
+    if init_dec_map == None:
+        init_dec_map = [0, 1, 0, 2]
+    
+    # result = differential_evolution(run, args=([0, 1, 0, 2],), bounds=[(0, 1), (-1, 1)], workers=-1, updating='deferred', maxiter=10, callback=cb)
+    result = object()
+    result.x = np.array([0.8, 0])
+
+    all_maps = list(sample_map(result.x))
+
+    with Pool(16) as p:
+        map_stats = p.starmap(run, all_maps)
+    
+    best_map = np.argmax(map_stats)
+    return all_maps[best_map][1]
+
+
+
+def sample_map(splits):
+    init_dec_map = [0, 1, 0, 2]
+    choices = [0, 3, 6]
+
+    for combo in product(*([choices] * 4)):
+        new_map = [a + b for a, b in zip(init_dec_map, combo)]
+        yield splits, new_map
+
+
+# TODO: will need to flesh out for real at some point v
+def _sample_map_old(n_maps=None, n_dec=4, n_idx=9):
+    idxs = list(range(n_idx))
+    choices = list(product([idxs] * n_dec))
+
+    if n_maps == None:
+        n_maps = len(choices)
+
+    rand_samp = np.random.choice(len(choices), replace=False, size=n_maps)
+    for samp in rand_samp:
+        yield choices[samp]
+
+
+# list(sample_map([]))
+
+# <codecell>
+def cb(xk, **kwargs):
+    print('XK', xk)
+
+result = differential_evolution(run, args=([0, 1, 0, 2],), bounds=[(0, 1), (-1, 1)], workers=-1, updating='deferred', maxiter=10, callback=cb)
+
+# <codecell>
+def cb(xk, **kwargs):
+    print('XK', xk)
+
+dec_map = [0, 1, 0, 2]
+
+for _ in range(3):
+    result = differential_evolution(run, args=(dec_map,), bounds=[(0, 1), (-1, 1)], workers=-1, updating='deferred', maxiter=5, callback=cb)
+    all_maps = list(sample_map(np.array(result.x)))
+
+    with Pool(16) as p:
+        map_stats = p.starmap(run, all_maps)
+
+    best_map = np.argmin(map_stats)
+    dec_map = all_maps[best_map][1]
+    print('BEST', dec_map)
+
+print('FINAL')
+print('RESULT', result)
+print('DEC MAP', dec_map)
+
+'''
+FINAL RESULTS
+
+RESULT      fun: 133.8
+ message: 'Maximum number of iterations has been exceeded.'
+    nfev: 318
+     nit: 5
+ success: False
+       x: array([6.91197986e-01, 6.26838075e-04])
+DEC MAP [3, 7, 0, 2]
+'''
+
