@@ -1,17 +1,38 @@
 """
-Playing with algorithms from Matiisen et al.
+All experiments for generating trajectories
 
 author: William Tong (wtong@g.harvard.edu)
 """
-
-# <codecell>
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.stats import linregress
-
+from dataclasses import dataclass, field
 import sys
+from typing import Callable
+
+from scipy.stats import linregress
+from tqdm import tqdm
+
 sys.path.append('../')
 from env import *
+
+@dataclass
+class Case:
+    name: str = ''
+    run_func: Callable = None
+    run_params: dict = field(default_factory=dict)
+    runs: list = field(default_factory=list)
+    info: list = field(default_factory=list)
+
+
+def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
+    gen = range(n_iters)
+    if use_tqdm:
+        gen = tqdm(gen)
+
+    for _ in gen:
+        for case in cases:
+            traj, info = case.run_func(**case.run_params, **global_kwargs)
+            case.runs.append(traj)
+            case.info.append(info)
+
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr})
@@ -133,7 +154,7 @@ def run_naive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=
     return traj, {'qs': all_qs}
 
 
-def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=1):
+def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=1, k=5):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -156,8 +177,8 @@ def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta
         all_scores[task_idx].append(score)
         all_times[task_idx].append(t)
 
-        all_scores[task_idx] = all_scores[task_idx][-5:]
-        all_times[task_idx] = all_times[task_idx][-5:]
+        all_scores[task_idx] = all_scores[task_idx][-k:]
+        all_times[task_idx] = all_times[task_idx][-k:]
 
         res = linregress(all_times[task_idx], all_scores[task_idx])
 
@@ -175,7 +196,7 @@ def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta
     return traj, {'qs': all_qs}
 
 
-def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1):
+def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, k=5):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -198,7 +219,7 @@ def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1):
         xs[task_idx] = reward
 
         all_rewards[task_idx].append(reward)
-        all_rewards[task_idx] = all_rewards[task_idx][-5:]
+        all_rewards[task_idx] = all_rewards[task_idx][-k:]
 
         all_qs.append(qs.copy())
         traj.append(task_idx + 1)
@@ -207,22 +228,3 @@ def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1):
             break
 
     return traj, {'qs': all_qs}
-
-N = 5
-# traj, all_qs = run_naive(goal_length=N, eps=np.random.randn)
-
-# qs = np.array(all_qs)
-# for i, q in enumerate(qs.T):
-#     plt.plot(q, label=f'task = {i+1}')
-
-# plt.legend()
-
-traj, _ = run_final_task_only(goal_length=N, eps=-1, max_steps=5000)
-print(len(traj))
-    
-
-
-
-# %%
-
-

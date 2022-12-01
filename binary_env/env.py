@@ -182,6 +182,8 @@ class Student(Agent):
         # only track Q-values for action = 1, maps state --> value
         if isinstance(q_e, numbers.Number):
             self.q_e = defaultdict(lambda: q_e)
+        elif callable(q_e):
+            self.q_e = defaultdict(q_e)
         elif type(q_e) != type(None):
             self.q_e = q_e
         else:
