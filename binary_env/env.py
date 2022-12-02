@@ -730,6 +730,281 @@ class TeacherPomcpAgent(Agent):
 
     def learn(self, *args, **kwargs):
         raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
+
+
+class TeacherPomcpAgentClean(Agent):
+    def __init__(self, goal_length, T, bins=10, p_eps=0.05,
+                       student_reward=10, 
+                       n_particles=500, gamma=0.9, eps=1e-2, 
+                       explore_factor=1, q_reinv_prob=0.25) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.T = T
+        self.bins = bins
+        self.p_eps = p_eps
+        self.student_reward = student_reward
+        self.q_reinv_prob = q_reinv_prob
+
+        self.n_particles = n_particles
+        self.gamma = gamma
+        self.eps = eps
+        self.explore_factor = explore_factor
+
+        self.actions = [0, 1, 2]
+        self.history = ()
+        self.full_history = ()
+        self.tree = MctsTree()
+
+        self.curr_n = 1
+        self.qrs_means = []
+        self.qrs_stds = []
+        self.qes_means = []
+        self.qes_stds = []
+        self.lr_means = []
+        self.lr_stds = []
+        self.num_particles = []
+    
+    
+    def reset(self):
+        self.history = ()
+        self.tree = MctsTree()
+
+        self.qrs_means = []
+        self.qrs_stds = []
+        self.num_particles = []
+        self.curr_n = 1
+    
+
+    def next_action(self, prev_action=None, obs=None):
+        if obs != None and prev_action != None:
+            print(f'Observed: {obs}')
+            self.history += (prev_action, obs,)
+            self.full_history += (prev_action, obs,)
+
+            if self.history not in self.tree or len(self.tree[self.history]['b']) == 0:
+                raise Exception('fail to converge')
+            else:
+                self.tree.reroot(self.history)
+                self.history = self.history[-1:]
+
+                qs = [(state[1], state[2], state[3]) for state in self.tree[self.history]['b']]
+                qrs, qes, lrs = zip(*qs)
+                qrs_mean = np.mean(qrs, axis=0)
+                qrs_std = np.std(qrs, axis=0)
+                qes_mean = np.mean(qes)
+                qes_std = np.std(qes)
+                lr_mean = np.mean(lrs)
+                lr_std = np.std(lrs)
+
+                self.num_particles.append(len(qrs))
+                self.qrs_means.append(qrs_mean)
+                self.qrs_stds.append(qrs_std)
+                self.qes_means.append(qes_mean)
+                self.qes_stds.append(qes_std)
+                self.lr_means.append(lr_mean)
+                self.lr_stds.append(lr_std)
+                print('N_particles:', len(qrs))
+
+        a = self._search()
+        self.curr_n = np.clip(self.curr_n + a - 1, 1, self.goal_length)  # NOTE: assuming agent follows the proposed action
+        return a
+    
+    def _sample_transition(self, state, action):
+        n, qr, qe, lr = state
+        new_n = np.clip(n + action - 1, 1, self.goal_length)
+        for _ in range(self.T):
+            fail_idx = self._sim_fail(new_n, qr + qe)
+            qr = self._update_qr(new_n, qr, qe, lr, fail_idx)
+        
+        reward = 0
+        is_done = False
+        if -np.sum(np.log(self._sig(qr + qe))) < self.p_eps and new_n == self.goal_length:
+            is_done = True
+            reward = 10
+
+        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + qe)[:new_n]])
+        obs = self._to_bin(log_prob)
+        
+        return (new_n, qr, qe, lr), obs, reward, is_done
+
+    def _sim_fail(self, n, qs):
+        for fail_idx, q in enumerate(qs[:n]):
+            if self._sig(q) < np.random.random():
+                return fail_idx
+        
+        return n
+
+    def _update_qr(self, n, qr, qe, lr, fail_idx):
+        qr = np.copy(qr)
+        if fail_idx == n:
+            payoff = self.student_reward
+        else:
+            payoff = self._sig(qr[fail_idx] + qe) * qr[fail_idx]
+        
+        probs = self._sig(qr[1:fail_idx] + qe)
+        rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
+        qr[:fail_idx] += lr * rpe
+        return qr
+    
+    def _sig(self, x):
+        return 1 / (1 + np.exp(-np.array(x)))
+
+    def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
+        logit = log_p - np.log(1 - np.exp(log_p) + eps)
+
+        norm = (logit - logit_min) / (logit_max - logit_min)
+        bin_p = np.clip(np.round(norm * self.bins), 0, self.bins)
+        
+        return bin_p
+
+    def _sample_prior(self):
+        qr = np.zeros(self.goal_length)
+        qe = np.random.uniform(-5, 5)
+        lr = np.random.uniform(0, 1)
+        return (1, qr, qe, lr) 
+
+    def _sample_rollout_policy(self, history):
+        return np.random.choice(self.actions)
+    
+    def _sample_inc_policy(self, state):
+        n, qr, qe = state[:3]
+        total_log_prob = 0
+        for i, q in enumerate(qr + qe):
+            total_log_prob += np.log(self._sig(q))
+            if total_log_prob < -self.p_eps:
+                break
+        
+        if i + 1 < n:
+            return 0
+        elif i + 1 > n:
+            return 2
+        else:
+            return 1
+
+    
+    def _init_node(self):
+        return {'v': 0, 'n': 0, 'b': []}
+    
+    def _search(self):
+        if len(self.history) == 0:
+            for _ in range(self.n_particles):
+                state = self._sample_prior()
+                self._simulate(state, self.history, 0)
+        else:
+            curr_states = self.tree[self.history]['b']
+
+            params = [(state[2], state[3]) for state in curr_states]
+            eps, lr = zip(*params)
+            eps_bounds = (np.min(eps), np.max(eps))
+            lr_bounds = (np.min(lr), np.max(lr))
+
+            print('ITER WITH HIST', self.full_history)
+            iters = []
+            vict_iters = []
+            for _ in range(self.n_particles):
+                state_idx = np.random.choice(len(curr_states))
+                state = curr_states[state_idx]
+
+                if np.random.random() < self.q_reinv_prob:
+                    new_eps = np.random.uniform(*eps_bounds)
+                    new_lr = np.random.uniform(*lr_bounds)
+                    state = (state[0], state[1], new_eps, new_lr)
+
+                tot_iter, vict_iter = self._simulate(state, self.history, 0)
+                iters.append(tot_iter)
+                vict_iters.append(vict_iter)
+
+            print('MEAN ITERS', np.mean(iters))
+            print('N_ITERS', len(iters))
+            # print('PROP VICT', np.mean(vict_iters))
+        
+        children = self.tree._traverse(self.history).children
+        vals = [children[a].value['v'] for a in self.actions]
+        print('VALS', vals)
+        return np.argmax(vals)
+    
+    def _simulate(self, state, history, depth):
+        reward_stack = []
+        node_stack = []
+        n_visited_stack = []
+
+        tot_iter = 0
+        vict_iter = 0
+
+        while self.gamma ** depth > self.eps:
+            tot_iter += 1
+
+            if history not in self.tree:
+                new_node = MctsNode(self._init_node())
+                new_node.children = {a: MctsNode(self._init_node()) for a in self.actions}
+                curr_node = self.tree._traverse(history[:-1])
+
+                if len(history) > 0:
+                    curr_node.children[history[-1]] = new_node
+                else:
+                    self.tree.root = new_node
+
+                pred_reward = self._rollout(state, history, depth)
+                reward_stack.append(pred_reward)
+                break
+
+            vals = []
+            curr_node = self.tree._traverse(history)
+            for a in self.actions:
+                next_node = curr_node.children[a].value
+                if curr_node.value['n'] > 0 and next_node['n'] > 0:
+                    explore = self.explore_factor * np.sqrt(np.log(curr_node.value['n']) / next_node['n'])
+                else:
+                    explore = 999  # arbitrarily high
+
+                vals.append(next_node['v'] + explore)
+
+            a = np.argmax(vals)
+            next_state, obs, reward, is_done = self._sample_transition(state, a)
+            reward_stack.append(reward)
+
+            if depth > 0:   # NOTE: avoid re-adding encountered state
+                curr_node.value['b'].append(state)
+            curr_node.value['n'] += 1
+
+            next_node = curr_node.children[a].value
+            next_node['n'] += 1
+            node_stack.append(next_node)
+            n_visited_stack.append(next_node['n'])
+
+            if is_done:
+                vict_iter = 1
+                break
+
+            history += (a, obs)
+            state = next_state
+            depth += 1
+        
+        for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
+            total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
+            node['v'] += (total_reward - node['v']) / n_visited
+        
+        return tot_iter, vict_iter
+
+
+    def _rollout(self, state, history, depth):
+        g = 1
+        total_reward = 0
+
+        while self.gamma ** depth > self.eps:
+            # a = self._sample_rollout_policy(history)
+            a = self._sample_inc_policy(state)
+            state, obs, reward, is_done = self._sample_transition(state, a)
+
+            history += (a, obs)
+            total_reward += g * reward
+            g *= self.gamma
+            depth += 1
+
+            if is_done:
+                break
+        
+        return total_reward
     
 
 class TeacherPerfectKnowledge(Agent):
@@ -1067,6 +1342,9 @@ class MctsTree:
             node[key[-1]] = MctsNode(value)
     
     def __contains__(self, key):
+        if len(key) == 0 and self.root.value == None:
+            return False
+
         try:
             node = self._traverse(key)
         except:
@@ -1083,6 +1361,9 @@ class MctsTree:
     
     def __str__(self):
         return str(self.root)
+    
+    def __repr__(self):
+        return str(self)
 
 
 class MctsNode:
@@ -1118,6 +1399,9 @@ class MctsNode:
     def __str__(self):
         children_str = '\n'.join([f'{key}: {str(child)}' for key, child in self.children.items()])
         return f'{self.value} -> [{children_str}]'
+    
+    def __repr__(self):
+        return str(self)
 
         
 # tree = MctsTree()

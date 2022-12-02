@@ -208,7 +208,7 @@ def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1):
 
     return traj, {'qs': all_qs}
 
-N = 5
+N = 7
 # traj, all_qs = run_naive(goal_length=N, eps=np.random.randn)
 
 # qs = np.array(all_qs)
@@ -217,7 +217,7 @@ N = 5
 
 # plt.legend()
 
-traj, _ = run_final_task_only(goal_length=N, eps=-1, max_steps=5000)
+traj, _ = run_incremental(goal_length=N, eps=-1, max_steps=5000)
 print(len(traj))
     
 

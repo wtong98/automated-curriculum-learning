@@ -250,7 +250,35 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
+agent = None
 def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
+    global agent
+
+    agent = TeacherPomcpAgentClean(goal_length=N, 
+                            T=T, bins=10, p_eps=0.05, gamma=gamma, 
+                            n_particles=n_iters, q_reinv_prob=0.25)
+    env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
+    traj = [env.N]
+    prev_obs = env.reset()
+    prev_a = None
+
+    for _ in range(max_steps):
+        a = agent.next_action(prev_a, prev_obs)
+
+        state, _, is_done, _ = env.step(a)
+        traj.append(env.N)
+
+        obs = agent._to_bin(state[1])
+        prev_a = a
+        prev_obs = obs
+
+        if is_done:
+            break
+    
+    return traj
+
+
+def run_pomcp_old(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
     agent = TeacherPomcpAgent(goal_length=N, 
                             lookahead_cap=1, 
                             T=T, bins=10, p_eps=0.05, gamma=gamma, 
@@ -290,11 +318,11 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     
 
 # <codecell>
-n_iters = 100
+n_iters = 1
 T = 3
-N = 5
+N = 10
 lr = 0.1
-max_steps = 2000
+max_steps = 500
 bins = 10
 eps = -1
 conf=0.2
@@ -312,11 +340,12 @@ cases = [
     # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
-    Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    # Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('Oscillator (95)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': 0.95, 'with_backtrack': True, 'bt_conf': 0.95, 'tau': 0.1, 'bt_tau': 0.02}, []),
-    Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
-    Case('Adaptive (Expv2)', run_adp_exp_disc_single, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
+    # Case('Adaptive (Expv2)', run_adp_exp_disc_single, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('POMCP', run_pomcp, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('POMCP (old)', run_pomcp_old, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
@@ -349,7 +378,7 @@ axs[1].set_ylabel('Iterations')
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
 
-axs[0].set_xlim((0, 100))
+# axs[0].set_xlim((0, 100))
 
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 

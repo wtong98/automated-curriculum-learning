@@ -27,6 +27,7 @@ from experiment import *
 
 save_path = Path('fig/')
 
+'''
 # <codecell>
 ### BENCHMARK: Incremental vs. Matiisen
 # TODO: tune Matiisen params
@@ -101,7 +102,7 @@ for N in Ns:
 # Adaptive oscillator
 # Adaptive exponential
 
-n_iters = 2
+n_iters = 5
 Ns = [3, 5, 10, 20]
 eps = np.linspace(-4, 2, num=7)
 # max_steps = 500
@@ -174,3 +175,69 @@ for N in Ns:
 
 # plt.savefig(fig_dir / f'N_{N}.svg')
 # plt.clf()
+'''
+# <codecell>
+### LONG RUN BENCHMARK (+ POMCP)
+n_iters = 3
+Ns = [3, 5, 10]
+eps = np.linspace(-1, 1, num=5)
+# max_steps = 500
+
+T = 3
+lr = 0.1
+alpha = 0.1
+beta = 1
+k = 5
+
+all_cases = defaultdict(lambda: None)
+raw_data = []
+
+for N in tqdm(Ns):
+    for e in eps:
+        cases = [
+            Case('Incremental', run_incremental, {'eps': e, 'goal_length': N}, []),
+            Case('POMCP', run_pomcp, {'eps': e, 'goal_length': N}, []),
+            Case('Adaptive (Osc)', run_adp_osc, {'eps': e, 'goal_length': N}, []),
+            Case('Adaptive (Exp)', run_adp_exp_disc, {'eps': e, 'goal_length': N}, []),
+        ]
+
+        run_exp(n_iters=n_iters, cases=cases, max_steps=N * 200, lr=lr, T=T)
+        all_cases[(N, e)] = cases
+        raw_data.extend(cases)
+
+df = pd.DataFrame(raw_data)
+df.to_pickle('df.pkl')
+
+# <codecell>
+fig_dir = save_path / 'inc_v_adp_pomcp'
+if not fig_dir.exists():
+    fig_dir.mkdir(parents=True)
+
+def extract_plot_vals(row):
+    traj_lens = [len(traj) for traj in row['runs']]
+
+    return pd.Series([
+        row['name'],
+        row['run_params']['goal_length'],
+        np.round(row['run_params']['eps'], decimals=2),
+        traj_lens
+    ], index=['name', 'N', 'eps', 'traj_lens'])
+
+
+plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
+plot_df = plot_df.loc[plot_df['N'] == 5]
+
+for N in Ns:
+    plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
+    plot_df = plot_df.loc[plot_df['N'] == N]
+
+    ax = sns.barplot(plot_df, x='eps', y='traj_lens', hue='name')
+    ax.get_legend().set_title(None)
+    ax.set_xlabel('Epsilon')
+    ax.set_ylabel('Iterations')
+    ax.set_yscale('log')
+    ax.set_title(f'N = {N}')
+    sns.move_legend(ax, 'upper right')
+
+    plt.savefig(fig_dir / f'N_{N}.svg')
+    plt.clf()
