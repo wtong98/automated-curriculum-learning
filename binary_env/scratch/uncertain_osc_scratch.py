@@ -12,6 +12,7 @@ import sys
 sys.path.append('../')
 
 from env import *
+from viz.experiment import run_adp_exp_disc
 
 class UncertainCurriculumEnv(CurriculumEnv):
     def __init__(self, *args, **kwargs):
@@ -289,18 +290,21 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     
 
 # <codecell>
-n_iters = 5
+n_iters = 100
 T = 3
 N = 5
 lr = 0.1
-max_steps = 10000
+max_steps = 2000
 bins = 10
-eps = -3
+eps = -1
 conf=0.2
 
 mc_iters = 1000
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
+
+def run_adp_exp_disc_single(*args, **kwargs):
+    return run_adp_exp_disc(*args, **kwargs)[0]
 
 cases = [
     # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
@@ -309,7 +313,9 @@ cases = [
     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    # Case('Oscillator (95)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': 0.95, 'with_backtrack': True, 'bt_conf': 0.95, 'tau': 0.1, 'bt_tau': 0.02}, []),
     Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
+    Case('Adaptive (Expv2)', run_adp_exp_disc_single, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
@@ -343,7 +349,7 @@ axs[1].set_ylabel('Iterations')
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
 
-axs[0].set_xlim((0, 30))
+axs[0].set_xlim((0, 100))
 
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 

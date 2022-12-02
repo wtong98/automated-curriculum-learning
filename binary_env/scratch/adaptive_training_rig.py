@@ -51,13 +51,19 @@ class TeacherTree:
 
 
 class TeacherExpAdaptive(Agent):
-    def __init__(self, goal_length, tree, dec_to_idx, prop_inc=100, shrink_factor=0.65, grow_factor=1.5, discount=0.9):
+    def __init__(self, goal_length, tree, dec_to_idx, discrete=False, prop_inc=100, shrink_factor=0.65, grow_factor=1.5, discount=0.8):
         self.goal_length = goal_length
         self.tree = tree
         self.dec_to_idx = dec_to_idx
-        self.inc = prop_inc
-        self.shrink_factor = shrink_factor
-        self.grow_factor = grow_factor
+        if discrete:
+            self.inc = 1
+            self.shrink_factor = 1
+            self.grow_factor = 1
+        else:
+            self.inc = prop_inc
+            self.shrink_factor = shrink_factor
+            self.grow_factor = grow_factor
+
         self.discount = discount
         self.avgs = []
     
@@ -78,7 +84,6 @@ class TeacherExpAdaptive(Agent):
             return self.inc
         
         return None
-
 
     def dec_to_inc(self, dec, curr_n):
         idx = self.dec_to_idx[dec]
@@ -137,7 +142,11 @@ class TeacherExpAdaptive(Agent):
 # plt.plot(traj)
 
 
-def run(splits, dec_to_idx, N_eff=10, eps_eff=0, n_iters=5, max_steps=200):
+def run(splits=None, dec_to_idx=None, N_eff=10, eps_eff=0, n_iters=5, max_steps=200):
+    if splits == None or dec_to_idx == None:   # load optimal values
+        splits = np.array([0.7, 0])
+        dec_to_idx = np.array([3, 7, 0, 2])
+
     N, eps = to_cont(N_eff, eps_eff, dn_per_interval=100)
     T = 5
     lr = 0.1
@@ -164,6 +173,9 @@ def run(splits, dec_to_idx, N_eff=10, eps_eff=0, n_iters=5, max_steps=200):
     
     return np.mean(results)
 
+# run()
+
+# <codecell>
 
 def search_params(init_dec_map=None, **kwargs):
     if init_dec_map == None:
@@ -234,7 +246,7 @@ print('FINAL')
 print('RESULT', result)
 print('DEC MAP', dec_map)
 
-'''
+''' TODO: tune and redo with new discount
 FINAL RESULTS
 
 RESULT      fun: 133.8

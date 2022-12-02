@@ -228,3 +228,43 @@ def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, k=
             break
 
     return traj, {'qs': all_qs}
+
+
+def run_adp_osc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
+    teacher = TeacherUncertainOsc(goal_length, **teacher_kwargs)
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True, return_transcript=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    return traj, {}
+
+
+def run_adp_exp_disc(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
+    splits = [0.8, 0]   # TODO: optimize
+    dec_to_idx = [0, 1, 0, 2]
+    tree = TeacherTree(splits)
+    teacher = TeacherExpAdaptive(goal_length, tree, dec_to_idx, discrete=True)
+
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True, return_transcript=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+
+    return traj, {}

@@ -4,17 +4,16 @@ Simple binary environments for experimenting with teacher-student interactions
 author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
-import copy
-import sys
-
 from collections import defaultdict
 from multiprocessing import Pool
+
 import numbers
 import warnings
 import gym
 import numpy as np
 import matplotlib.pyplot as plt
 
+from scipy.stats import beta
 from sklearn.metrics.pairwise import rbf_kernel
 from tqdm import tqdm
 
@@ -60,6 +59,7 @@ class CurriculumEnv(gym.Env):
                  student_qe_dist=None,
                  student_params=None,
                  anarchy_mode=False,
+                 return_transcript=False,
                  track_qs=False):
         super().__init__()
 
@@ -81,6 +81,7 @@ class CurriculumEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(3)
         self.student_params = student_params if student_params != None else {}
         self.anarchy_mode = anarchy_mode
+        self.return_transcript = return_transcript
     
     def step(self, action):
         if self.anarchy_mode:
@@ -109,7 +110,8 @@ class CurriculumEnv(gym.Env):
             reward = self.teacher_reward
             is_done = True
 
-        return (self.N, log_prob), reward, is_done, {'transcript': trans, 'qs': all_qs}
+        metric = log_prob if not self.return_transcript else trans
+        return (self.N, metric), reward, is_done, {'transcript': trans, 'qs': all_qs}
     
     def reset(self):
         self.student = Student(q_e=self.student_qe_dist, **self.student_params)
@@ -317,6 +319,152 @@ class Teacher(Agent):
         # plt.contourf(ll, nn, z)
         plt.imshow(z)
         plt.colorbar()
+
+
+class TeacherUncertainOsc(Agent):
+    def __init__(self, goal_length, tau=0.95, conf=0.2, max_m_factor=3, with_backtrack=False, bt_tau=0.25, bt_conf=0.2) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.tau = tau
+        self.conf = conf
+        self.with_backtrack = with_backtrack
+        self.bt_tau = bt_tau
+        self.bt_conf = bt_conf
+
+        self.trans_dict = defaultdict(list)
+        self.n = 1
+
+        p_eps = -np.log(tau)
+        raw_min_m = np.log(1 - conf) / (-p_eps) - 1
+        self.min_m = int(np.floor(raw_min_m))
+        self.max_m = int(self.min_m * max_m_factor)
+
+    def next_action(self, state):
+        curr_n, trans = state
+        self.trans_dict[curr_n].extend(trans)
+
+        next_n = self.n
+        if self.do_jump():
+            self.n = min(self.n + 1, self.goal_length)
+            next_n = self.n
+        elif self.with_backtrack and self.do_dive():
+            self.n = max(self.n - 1, 1)
+            next_n = self.n
+        elif next_n == curr_n:
+            next_n = max(self.n - 1, 1)
+        
+        return next_n
+    
+    def do_jump(self):
+        trans = self.trans_dict[self.n]
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(trans[-k:])
+            if prob_good >= self.conf:
+                return True
+
+        return False
+
+    def do_dive(self):
+        if self.n == 1:
+            return
+
+        trans = self.trans_dict[self.n - 1]
+        rev_trans = [not bit for bit in trans]
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(rev_trans[-k:], 1 - self.bt_tau)
+            if prob_good >= self.bt_conf:
+                return True
+        
+        return False
+    
+    def _get_prob_good(self, transcript, tau=None):
+        if tau == None:
+            tau = self.tau
+
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
+        return 1 - prob_bad
+
+
+class TeacherExpAdaptive(Agent):
+    def __init__(self, goal_length, tree, dec_to_idx, discrete=False, prop_inc=100, shrink_factor=0.65, grow_factor=1.5, discount=0.8):
+        self.goal_length = goal_length
+        self.tree = tree
+        self.dec_to_idx = dec_to_idx
+        if discrete:
+            self.inc = 1
+            self.shrink_factor = 1
+            self.grow_factor = 1
+        else:
+            self.inc = prop_inc
+            self.shrink_factor = shrink_factor
+            self.grow_factor = grow_factor
+
+        self.discount = discount
+        self.avgs = []
+    
+    def idx_to_act(self, idx):
+        inc_idx = idx // 3
+        jump_idx = idx % 3
+
+        if inc_idx == 1:
+            self.inc *= self.shrink_factor
+        elif inc_idx == 2:
+            self.inc *= self.grow_factor
+            
+        if jump_idx == 0:
+            return -self.inc
+        elif jump_idx == 1:
+            return 0
+        elif jump_idx == 2:
+            return self.inc
+        
+        return None
+
+    def dec_to_inc(self, dec, curr_n):
+        idx = self.dec_to_idx[dec]
+        act = self.idx_to_act(idx)
+        return np.clip(act + curr_n, 1, self.goal_length).astype(int)
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self._consume_trans(trans)
+
+        if len(self.avgs) == 1:
+            return self.inc
+        
+        avg, last_avg = self.avgs[-1], self.avgs[-2]
+        dec = self.tree.decide([avg, avg - last_avg])
+        return self.dec_to_inc(dec, curr_n)
+    
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
+
+
+class TeacherTree:
+    def __init__(self, splits, decisions=None, n_feats=2, n_splits=2) -> None:
+        if type(splits) != np.ndarray:
+            splits = np.array(splits)
+        if decisions != None and type(decisions) != np.ndarray:
+            decisions = np.array(decisions)
+
+        self.splits = splits.reshape(n_feats, n_splits - 1)
+        if decisions == None:
+            decisions = np.arange(n_feats * n_splits)
+
+        self.decisions = decisions.reshape((n_splits,) * n_feats)
+    
+    def decide(self, feats):
+        result = self.decisions
+        for i, x in enumerate(feats):
+            split = self.splits[i]
+            dec_idx = np.sum(x > split)
+            result = result[dec_idx]
+        return result
 
 
 class TeacherPomcpAgent(Agent):
