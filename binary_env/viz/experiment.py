@@ -293,7 +293,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
         if is_done:
             break
     
-    return traj
+    return traj, {}
 
 
 def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
@@ -304,4 +304,4 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
             print('pomcp failure', i+1)
             print(e)
     
-    return [0] * max_steps
+    return [0] * max_steps, {}
