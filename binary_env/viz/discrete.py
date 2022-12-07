@@ -242,8 +242,8 @@ def extract_plot_vals(row):
     ], index=['name', 'N', 'eps', 'traj_lens'])
 
 
-plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
-plot_df = plot_df.loc[plot_df['N'] == 5]
+# plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
+# plot_df = plot_df.loc[plot_df['N'] == 5]
 
 for N in Ns:
     plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
