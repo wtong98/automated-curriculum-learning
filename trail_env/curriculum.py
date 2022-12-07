@@ -107,6 +107,7 @@ class Teacher:
             self.sched = lambda x: x
         elif hasattr(sched, '__getitem__'):
             self.sched = lambda x: sched[x]
+            self.sched_len = len(sched)
         else:
             self.sched = sched
 
@@ -128,6 +129,7 @@ class Teacher:
         self.fresh = True
         self.trajectory = []
         self.history = defaultdict(list)
+        self.trans = None
     
     def load_training_env(self, env):
         self.training_env = env
@@ -139,7 +141,8 @@ class Teacher:
         if not self.fresh:
             success_prob = self._test_student(self.eval_env)
             self.trajectory.append((self.sched_idx, success_prob))
-            self.history[self.sched_idx].extend(self._interleave(self.training_env.get_attr('history')))
+            self.trans = self._interleave(self.training_env.get_attr('history'))
+            self.history[self.sched_idx].extend(self.trans)
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
                 self.logger.record('trajectory/success_prob', success_prob)
@@ -179,23 +182,22 @@ class Teacher:
         return total_success / self.n_test_episodes
     
 
-class NaiveTeacher(Teacher):
-    def __init__(self, tau=0.95, len_sched=None):
-        super().__init__(len_sched)
+class FinalTaskTeacher(Teacher):
+    def __init__(self, tau=0.95, **teacher_kwargs):
+        super().__init__(**teacher_kwargs)
         self.prob_threshold = tau
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
-        self.sched_idx = len(self.sched) - 1
+        self.sched_idx = self.sched_len - 1
 
         if prob > self.prob_threshold:
             raise StopIteration
 
 
 class IncrementalTeacher(Teacher):
-    def __init__(self, goal_length, tau=0.95, **teacher_kwargs):
+    def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
-        self.goal_length = goal_length
         self.prob_threshold = tau
     
     def _update_sched_idx(self):
@@ -203,11 +205,11 @@ class IncrementalTeacher(Teacher):
 
         if prob > self.prob_threshold:
             self.sched_idx += 1
-            if self.sched_idx >= self.goal_length:
+            if self.sched_idx >= self.sched_len:
                 raise StopIteration
 
 
-class OscillatingTeacher(Teacher):
+class AdaptiveOscTeacher(Teacher):
     def __init__(self, tau=0.95, conf=0.2, min_m_abs=5, max_m_factor=3, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.tau = tau
@@ -223,7 +225,7 @@ class OscillatingTeacher(Teacher):
         _, prob = self.trajectory[-1]
 
         if self.do_jump(trans):
-            self.curr_idx = min(self.curr_idx + 1, len(self.sched) - 1)
+            self.curr_idx = min(self.curr_idx + 1, self.sched_len - 1)
             self.sched_idx = self.curr_idx
         elif self.do_dive(trans):
             self.curr_idx = max(self.curr_idx - 1, 0)
@@ -234,7 +236,7 @@ class OscillatingTeacher(Teacher):
             else:
                 self.sched_idx = self.curr_idx
         
-        if self.curr_idx == len(self.sched) - 1 and prob > self.tau:
+        if self.curr_idx == self.sched_len - 1 and prob > self.tau:
             raise StopIteration
 
     def do_jump(self, trans):
@@ -260,7 +262,44 @@ class OscillatingTeacher(Teacher):
         prob_bad = beta.cdf(self.tau, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
-class AdaptiveTeacher(Teacher):
+
+class AdaptiveExpTeacher(Teacher):
+    def __init__(self, tau=0.95, discount=0.9, **teacher_kwargs):
+        super().__init__(**teacher_kwargs)
+        self.tau = tau
+        self.discount = discount
+        self.avgs = []
+
+    def _update_sched_idx(self):
+        _, prob = self.trajectory[-1]
+        print('TRANS', self.trans)
+        self._consume_trans(self.trans)
+
+        if len(self.avgs) == 1:
+            return
+        
+        avg, last_avg = self.avgs[-1], self.avgs[-2]
+
+        if avg > 0.8:
+            if avg >= last_avg:
+                self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
+            else:
+                self.sched_idx = max(self.sched_idx - 1, 0)
+        elif avg < last_avg:
+            self.sched_idx = max(self.sched_idx - 1, 0)
+
+        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+            raise StopIteration
+
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
+        self.logger.record('trajectory/exp_avg', avg)
+
+
+class AdaptiveOscTeacherCont(Teacher):
     def __init__(self, goal_length, tau=0.5, threshold=0.8, threshold_low=0.2, conf=0.95, cut_factor=2, min_m_abs=5, max_m_factor=3, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.goal_length = goal_length
@@ -330,21 +369,15 @@ class AdaptiveTeacher(Teacher):
         
 
 class RandomTeacher(Teacher):
-    def __init__(self, target_env=None, **teacher_kwargs):
+    def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
-        self.prob_threshold = 0.9
-
-        if target_env == None:
-            target_env = TrailEnv(MeanderTrail(**self.sched[self.sched_idx]))
-        self.target_env = target_env
+        self.prob_threshold = tau
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
         if prob > self.prob_threshold:
-            target_prob = self._test_student(self.target_env)
-            if target_prob > self.prob_threshold:
-                raise StopIteration
+            raise StopIteration
         
-        self.sched_idx = np.random.choice(len(self.length_schedule))
+        self.sched_idx = np.random.choice(self.sched_len)
     
     

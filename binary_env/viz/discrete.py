@@ -42,7 +42,6 @@ alpha = 0.1
 beta = 1
 k = 5
 
-all_cases = defaultdict(lambda: None)
 raw_data = []
 
 for N in tqdm(Ns):
@@ -58,7 +57,6 @@ for N in tqdm(Ns):
         ]
 
         run_exp(n_iters=n_iters, cases=cases, max_steps=N * 100, lr=lr, T=T)
-        all_cases[(N, e)] = cases
         raw_data.extend(cases)
 
 df = pd.DataFrame(raw_data)

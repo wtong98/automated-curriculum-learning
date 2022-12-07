@@ -120,6 +120,55 @@ class TeacherExpAdaptive(Agent):
         for x in trans:
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
+
+
+#TODO: consider implementing Holt's linear exponential smoothing: https://en.wikipedia.org/wiki/Exponential_smoothing
+class TeacherDoubleExpAdaptive(Agent):
+    def __init__(self, goal_length, data_discount=0.5, trend_discount=0.2):
+        self.goal_length = goal_length
+        self.data_discount = data_discount
+        self.trend_discount = trend_discount
+
+        self.data_hist = []
+        self.trend_hist = []
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self._consume_trans(trans)
+
+        if len(self.avgs) == 1:
+            return 1
+        
+        avg, last_avg = self.avgs[-1], self.avgs[-2]
+
+        if avg > 0.8:
+            if avg > last_avg:
+                return min(curr_n + 1, self.goal_length)
+            else:
+                return max(curr_n - 1, 1)
+        else:
+            if avg > last_avg:
+                return curr_n
+            else:
+                return max(curr_n - 1, 1)
+    
+    def _consume_trans(self, trans):
+        if len(self.data_hist) == 0:
+            self.data_hist.append(0)
+            self.trend_hist.append(0)
+            return
+        
+        self.data_avg = self.data_hist[-1]
+        self.trend_avg = self.trend_hist[-1]
+
+        for x in trans:
+            pass
+
+
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
         
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
@@ -331,9 +380,6 @@ mc_iters = 1000
 
 Case = namedtuple('Case', ['name', 'run_func', 'run_params', 'runs'])
 
-def run_adp_exp_disc_single(*args, **kwargs):
-    return run_adp_exp_disc(*args, **kwargs)[0]
-
 cases = [
     # Case('Incremental', run_incremental, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Incremental (w/ BT)', run_incremental_with_backtrack, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
@@ -342,9 +388,8 @@ cases = [
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('Oscillator (95)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': 0.95, 'with_backtrack': True, 'bt_conf': 0.95, 'tau': 0.1, 'bt_tau': 0.02}, []),
-    # Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
-    # Case('Adaptive (Expv2)', run_adp_exp_disc_single, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
-    Case('POMCP', run_pomcp, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
+    # Case('POMCP', run_pomcp, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('POMCP (old)', run_pomcp_old, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),

@@ -259,4 +259,70 @@ plt.savefig('sample_plume.svg')
 # plt.savefig('start_y_40.png')
 
 # <codecell>
-'''
+### MANY LARGE PLOTS
+model_path = Path('trained/plume_rate/0/gen30.zip')
+
+trail_args = sched[-6]
+
+model = PPO.load(model_path, device='cpu')
+n_samps = 25
+
+path = Path(f'plume_examples/')
+if not path.exists():
+    path.mkdir()
+
+for i in tqdm(range(n_samps)):
+
+    maps = []
+    position_hists = []
+    odor_hists = []
+
+    # print('preparing to generate headings')
+    trail_map = PlumeTrail(**trail_args)
+    trail_map.max_steps = 1000
+
+    env = TrailEnv(trail_map, discrete=True, treadmill=True)
+    
+
+    obs = env.reset()
+    while True:
+        action, _ = model.predict(obs, deterministic=True)
+        obs, reward, is_done, _ = env.step(action)
+
+        if is_done:
+            break
+
+    # print('gen heading')
+    maps.append(trail_map)
+    position_hists.append(np.array(env.agent.position_history))
+    odor_hists.append(env.agent.odor_history)
+
+    fig, axs = plt.subplots(1, 1, figsize=(6, 12))
+
+    for ax, m, p_hist, odor_hist in zip([axs], maps, position_hists, odor_hists):
+        odor_hist = np.array(odor_hist)
+        odor_hist = odor_hist[odor_hist[:,0] > 0]
+
+        x_min = min(-30, np.min(p_hist[:,0]))
+        x_max = max(30, np.max(p_hist[:,0]))
+
+        y_min = min(-50, np.min(p_hist[:,1]))
+        y_max = max(10, np.max(p_hist[:,1]))
+
+        m.plot(ax=ax, x_lim=(x_min-20, x_max+20), y_lim=(y_min - 20, y_max + 20))
+        ax.plot(p_hist[:,0], p_hist[:,1], linewidth=2, color='black')
+        ax.scatter(odor_hist[:,1], odor_hist[:,2], c=np.log(odor_hist[:,0]), cmap='summer', s=30)
+
+    ratio = (y_max - y_min + 40) / (x_max - x_min + 40)
+    height = 6 * ratio
+
+    fig.set_size_inches((6, height))
+    fig.tight_layout()
+
+    plt.axis('off')
+    plt.savefig(str(path / f'example_{i}.png'))
+    # np.save(str(path / f'positions_{i}.npy'), p_hist)
+    # with (path / f'map_{i}.pkl').open('wb') as fp:
+    #     pickle.dump(m, fp)
+    
+    plt.clf()

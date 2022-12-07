@@ -4,11 +4,13 @@ Benchmark performance of various teacher strategies
 author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
-import pickle
+from dataclasses import dataclass, field
 
 from collections import namedtuple
+from typing import Callable
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv 
 import torch
@@ -37,11 +39,11 @@ def make_model(env):
                     'net_arch': [{'pi': [128, 128], 'vf': [128, 128]}],
                     'activation_fn': torch.nn.ReLU
                 },
-                device='cpu'
+                device='auto'
                 )
 
-def run_session(student, teacher, eval_env, cb_params):
-    student.learn(total_timesteps=3000000, 
+def run_session(student, teacher, eval_env, cb_params, max_steps=3000000):
+    student.learn(total_timesteps=max_steps, 
                   eval_env=eval_env, 
                   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
@@ -79,67 +81,84 @@ def to_sched_cont():
     return sched
 
 
-Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
+@dataclass
+class Case:
+    name: str = ''
+    teacher: Callable = None
+    teacher_params: dict = field(default_factory=dict)
+    cb_params: dict = field(default_factory=dict)
+    runs: list = field(default_factory=list)
 
 
 if __name__ == '__main__':
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
-        (10, [(0.5, 0.6)]),
-        (20, [(0.5, 0.6)]),
-        (30, [(0.5, 0.6)]),
-        (40, [(0.5, 0.6)]),
-        (50, [(0.5, 0.6)]),
-        (60, [(0.5, 0.6)]),
-        (60, [(0.5, 0.61)]),
-        (70, [(0.5, 0.6)]),
-        (70, [(0.5, 0.61)]),
-        (80, [(0.5, 0.6)]),
-        (80, [(0.5, 0.61)]),
-        (90, [(0.5, 0.6)]),
-        (90, [(0.5, 0.61)]),
-        (100, [(0.5, 0.6)]),
-        (110, [(0.5, 0.6)]),
-        (120, [(0.5, 0.6)]),
-        (120, [(0.5, 0.61)]),
-        (120, [(0.5, 0.62)]),
-        (120, [(0.5, 0.63)]),
-        (120, [(0.5, 0.64)]),
-        (120, [(0.5, 0.65)]),
-        (120, [(0.5, 0.66)]),
-        (120, [(0.5, 0.67)]),
-        (120, [(0.5, 0.68)]),
-        (120, [(0.5, 0.69)]),
-        (120, [(0.5, 0.7)]),
+        (5, []),
+        (10, []),
+        (15, []),
+
+        # (10, [(0.5, 0.6)]),
+        # (20, [(0.5, 0.6)]),
+        # (30, [(0.5, 0.6)]),
+        # (40, [(0.5, 0.6)]),
+        # (50, [(0.5, 0.6)]),
+        # (60, [(0.5, 0.6)]),
+        # (60, [(0.5, 0.61)]),
+        # (70, [(0.5, 0.6)]),
+        # (70, [(0.5, 0.61)]),
+        # (80, [(0.5, 0.6)]),
+        # (80, [(0.5, 0.61)]),
+        # (90, [(0.5, 0.6)]),
+        # (90, [(0.5, 0.61)]),
+        # (100, [(0.5, 0.6)]),
+        # (110, [(0.5, 0.6)]),
+        # (120, [(0.5, 0.6)]),
+        # (120, [(0.5, 0.61)]),
+        # (120, [(0.5, 0.62)]),
+        # (120, [(0.5, 0.63)]),
+        # (120, [(0.5, 0.64)]),
+        # (120, [(0.5, 0.65)]),
+        # (120, [(0.5, 0.66)]),
+        # (120, [(0.5, 0.67)]),
+        # (120, [(0.5, 0.68)]),
+        # (120, [(0.5, 0.69)]),
+        # (120, [(0.5, 0.7)]),
     ]
-    # sched = to_sched(*zip(*sched))
-    sched = to_sched_cont()
+    sched = to_sched(*zip(*sched))
+    # sched = to_sched_cont()
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
     
-    # TODO: should've jumped by now?
     cases = [
-        # Case('Incremental', IncrementalTeacher, {'len_sched': len_sched}, []),
-        # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5}, {'save_every': 1, 'save_path': 'trained/osc_break_ii'}, []),
-        # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
-        Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), # TODO: monitor probabilities (some seem impossible?)
+        Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher),
+        Case('Incremental', IncrementalTeacher),
+        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(**case.teacher_params)
+            teacher = case.teacher(sched=sched, tau=0.9, **case.teacher_params)
             model = make_model(env)
             # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
-            case.cb_params['save_path'] += f'/{i}'
-            traj = run_session(model, teacher, eval_env, case.cb_params)
-            traj = [t[0] for t in traj]
-            case.traj.append(traj)
+            if 'save_path' in case.cb_params:
+                case.cb_params['save_path'] += f'/{i}'
 
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=100000)
+            traj = [t[0] for t in traj]
+            case.runs.append(traj)
+        
+    df = pd.DataFrame(cases)
+    df.to_pickle('meander_results.pkl')
+
+# TODO: separate plotting from training code <- STOPPED HERE
 # <codecell>
+'''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):
@@ -271,19 +290,22 @@ fig.suptitle('Sample of agent runs')
 fig.tight_layout()
 plt.savefig('tmp.png')
 # %%
-# TMP SINGLE PLOT
+# MANY LONG PLOTS
 
 model_path = Path('trained/osc_break_ii/0/gen172.zip')
 
 trail_args = sched(120)
 trail_args['length'] = 500
-trail_args['breaks'] = []
+trail_args['breaks'] = [(0.3, 0.32), (0.5, 0.53), (0.7, 0.72)]
 
 model = PPO.load(model_path, device='cpu')
+n_samps = 25
 
-for i in tqdm(range(10)):
-    path = Path(f'sample/{i}')
-    path.mkdir(exist_ok=True, parents=True)
+path = Path(f'trail_examples/')
+if not path.exists():
+    path.mkdir()
+
+for i in tqdm(range(n_samps)):
 
     maps = []
     position_hists = []
@@ -325,11 +347,13 @@ for i in tqdm(range(10)):
     fig.set_size_inches((6, height))
     fig.tight_layout()
 
-    plt.savefig(str(path / f'plot_{i}.png'))
-    np.save(str(path / f'positions_{i}.npy'), p_hist)
-    with (path / f'map_{i}.pkl').open('wb') as fp:
-        pickle.dump(m, fp)
+    plt.axis('off')
+    plt.savefig(str(path / f'example_{i}.png'))
+    # np.save(str(path / f'positions_{i}.npy'), p_hist)
+    # with (path / f'map_{i}.pkl').open('wb') as fp:
+    #     pickle.dump(m, fp)
     
     plt.clf()
 
 # %%
+'''
