@@ -149,7 +149,7 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=100000)
+            traj = run_session(model, teacher, eval_env, case.cb_params)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         

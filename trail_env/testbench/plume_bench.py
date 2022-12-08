@@ -4,9 +4,12 @@ Benchmark performance of various teacher strategies
 author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
-from collections import namedtuple
+from dataclasses import dataclass, field
+from typing import Callable
+
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv 
 import torch
@@ -39,8 +42,8 @@ def make_model(env):
                 device='auto'
                 )
 
-def run_session(student, teacher, eval_env, cb_params):
-    student.learn(total_timesteps=3000000, 
+def run_session(student, teacher, eval_env, cb_params, max_steps=3000000):
+    student.learn(total_timesteps=max_steps, 
                   eval_env=eval_env, 
                   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
@@ -75,12 +78,20 @@ def to_sched(rates):
 #     return sched
 
 
-Case = namedtuple('Case', ['name', 'teacher', 'teacher_params', 'cb_params', 'traj'])
+@dataclass
+class Case:
+    name: str = ''
+    teacher: Callable = None
+    teacher_params: dict = field(default_factory=dict)
+    cb_params: dict = field(default_factory=dict)
+    runs: list = field(default_factory=list)
 
 
 if __name__ == '__main__':
     n_runs = 1
-    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
+    # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
+    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
+    # rates = [1, 0.9]
     sched = to_sched(rates)
 
     def env_fn(): return TrailEnv()
@@ -89,23 +100,30 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        Case('Incremental', IncrementalTeacher, {'goal_length': len(rates) - 1, 'sched': sched, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/plume_rate'}, []),
-        # Case('Oscillator', OscillatingTeacher, {'sched': sched, 'tau': 0.9, 'conf':0.5, 'trail_class': PlumeTrail}, {'save_every': 1, 'save_path': 'trained/inc_plume'}, []),
-        # Case('Naive', NaiveTeacher, {'len_sched': len_sched}, [])
-        # Case('Adaptive', AdaptiveTeacher, {'goal_length': 120, 'sched': sched, 'tau': 0.3}, {'save_every': 1, 'save_path': 'trained/adp'}, []), 
+        Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher),
+        Case('Incremental', IncrementalTeacher),
+        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(**case.teacher_params)
+            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
-            case.cb_params['save_path'] += f'/{i}'
+            if 'save_path' in case.cb_params:
+                case.cb_params['save_path'] += f'/{i}'
+
             traj = run_session(model, teacher, eval_env, case.cb_params)
             traj = [t[0] for t in traj]
-            case.traj.append(traj)
+            case.runs.append(traj)
+
+    df = pd.DataFrame(cases)
+    df.to_pickle('plume_results.pkl')
 
 # <codecell>
+'''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):
@@ -133,7 +151,6 @@ if __name__ == '__main__':
     fig.tight_layout()
     plt.savefig('trained/inc_plume/0/tt_trajs.png')
 
-# '''
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 # TODO: mark odor along trajectory of agent
@@ -326,3 +343,4 @@ for i in tqdm(range(n_samps)):
     #     pickle.dump(m, fp)
     
     plt.clf()
+'''
