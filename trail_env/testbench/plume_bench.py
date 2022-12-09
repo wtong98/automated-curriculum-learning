@@ -88,7 +88,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 1
+    n_runs = 3
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
     rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225]
     # rates = [1, 0.9]
@@ -100,16 +100,16 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        # Case('Final', FinalTaskTeacher),
-        # Case('Random', RandomTeacher),
-        # Case('Incremental', IncrementalTeacher),
+        Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher),
+        Case('Incremental', IncrementalTeacher),
         Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, **case.teacher_params)
+            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, max_steps=1000000, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
             if 'save_path' in case.cb_params:
