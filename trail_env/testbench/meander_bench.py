@@ -105,10 +105,10 @@ if __name__ == '__main__':
         (50, [(0.5, 0.6)]),
         (60, [(0.5, 0.6)]),
         (60, [(0.5, 0.61)]),
-        # (70, [(0.5, 0.6)]),
-        # (70, [(0.5, 0.61)]),
-        # (80, [(0.5, 0.6)]),
-        # (80, [(0.5, 0.61)]),
+        (70, [(0.5, 0.6)]),
+        (70, [(0.5, 0.61)]),
+        (80, [(0.5, 0.6)]),
+        (80, [(0.5, 0.61)]),
         # (90, [(0.5, 0.6)]),
         # (90, [(0.5, 0.61)]),
         # (100, [(0.5, 0.6)]),
@@ -137,12 +137,12 @@ if __name__ == '__main__':
         Case('Random', RandomTeacher),
         Case('Incremental', IncrementalTeacher),
         Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher),
+        # Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(sched=sched, tau=0.9, **case.teacher_params)
+            teacher = case.teacher(sched=sched, tau=0.9, max_steps=1000000, **case.teacher_params)
             model = make_model(env)
             # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)

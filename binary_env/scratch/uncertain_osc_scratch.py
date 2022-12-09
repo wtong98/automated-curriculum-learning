@@ -121,8 +121,7 @@ class TeacherExpAdaptive(Agent):
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
 
-
-#TODO: consider implementing Holt's linear exponential smoothing: https://en.wikipedia.org/wiki/Exponential_smoothing
+# TODO: implement for trail teacher
 class TeacherDoubleExpAdaptive(Agent):
     def __init__(self, goal_length, data_discount=0.5, trend_discount=0.2):
         self.goal_length = goal_length
@@ -136,18 +135,19 @@ class TeacherDoubleExpAdaptive(Agent):
         curr_n, trans = state
         self._consume_trans(trans)
 
-        if len(self.avgs) == 1:
+        if len(self.data_hist) == 1:
             return 1
         
-        avg, last_avg = self.avgs[-1], self.avgs[-2]
+        data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
 
-        if avg > 0.8:
-            if avg > last_avg:
+        if data_avg > 0.8:
+            if trend_avg > 0:
                 return min(curr_n + 1, self.goal_length)
             else:
                 return max(curr_n - 1, 1)
         else:
-            if avg > last_avg:
+            if trend_avg > 0:
                 return curr_n
             else:
                 return max(curr_n - 1, 1)
@@ -158,18 +158,17 @@ class TeacherDoubleExpAdaptive(Agent):
             self.trend_hist.append(0)
             return
         
-        self.data_avg = self.data_hist[-1]
-        self.trend_avg = self.trend_hist[-1]
+        last_data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
 
         for x in trans:
-            pass
+            data_avg = (1 - self.data_discount) * x + self.data_discount * (last_data_avg + trend_avg)
+            trend_avg = (1 - self.trend_discount) * (data_avg - last_data_avg) + self.trend_discount * trend_avg
+            last_data_avg = data_avg
 
+        self.data_hist.append(data_avg)
+        self.trend_hist.append(trend_avg)
 
-        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
-        for x in trans:
-            avg = (1 - self.discount) * x + self.discount * avg
-        self.avgs.append(avg)
-        
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr})
@@ -248,6 +247,28 @@ def run_adp_exp(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwa
         if is_done:
             break
     
+    return traj
+
+
+de_teacher = None
+def run_adp_double_exp(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
+    global de_teacher
+
+    teacher = TeacherDoubleExpAdaptive(goal_length, **teacher_kwargs)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    de_teacher = teacher
     return traj
 
 
@@ -367,7 +388,7 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     
 
 # <codecell>
-n_iters = 1
+n_iters = 100
 T = 3
 N = 10
 lr = 0.1
@@ -389,6 +410,7 @@ cases = [
     # Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
     # Case('Oscillator (95)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': 0.95, 'with_backtrack': True, 'bt_conf': 0.95, 'tau': 0.1, 'bt_tau': 0.02}, []),
     Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
+    Case('Adaptive (Exp x2)', run_adp_double_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'data_discount': 0.8, 'trend_discount': 0.9}, []),
     # Case('POMCP', run_pomcp, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('POMCP (old)', run_pomcp_old, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),

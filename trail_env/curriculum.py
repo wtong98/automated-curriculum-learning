@@ -186,6 +186,7 @@ class FinalTaskTeacher(Teacher):
     def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.prob_threshold = tau
+        self.sched_idx = self.sched_len - 1
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
@@ -280,7 +281,7 @@ class AdaptiveExpTeacher(Teacher):
         
         avg, last_avg = self.avgs[-1], self.avgs[-2]
 
-        if avg > 0.8:
+        if avg > 0.5:
             if avg >= last_avg:
                 self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
             else:
