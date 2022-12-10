@@ -273,7 +273,6 @@ class AdaptiveExpTeacher(Teacher):
 
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
-        print('TRANS', self.trans)
         self._consume_trans(self.trans)
 
         if len(self.avgs) == 1:
@@ -281,11 +280,12 @@ class AdaptiveExpTeacher(Teacher):
         
         avg, last_avg = self.avgs[-1], self.avgs[-2]
 
-        if avg > 0.5:
+        if avg > 0.7:
             if avg >= last_avg:
                 self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
             else:
-                self.sched_idx = max(self.sched_idx - 1, 0)
+                # self.sched_idx = max(self.sched_idx - 1, 0)
+                return
         elif avg < last_avg:
             self.sched_idx = max(self.sched_idx - 1, 0)
 
@@ -298,6 +298,59 @@ class AdaptiveExpTeacher(Teacher):
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
         self.logger.record('trajectory/exp_avg', avg)
+
+
+class AdaptiveDoubleExpTeacher(Teacher):
+
+    def __init__(self, tau=0.95, data_discount=0.8, trend_discount=0.9, **teacher_kwargs):
+        super().__init__(**teacher_kwargs)
+        self.tau = tau
+        self.data_discount = data_discount
+        self.trend_discount = trend_discount
+
+        self.data_hist = []
+        self.trend_hist = []
+
+    def _update_sched_idx(self):
+        _, prob = self.trajectory[-1]
+        self._consume_trans(self.trans)
+
+        data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
+
+        if data_avg > 0.7:
+            if trend_avg > 0:
+                self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
+            else:
+                # self.sched_idx = max(self.sched_idx - 1, 0)
+                return
+        else:
+            if trend_avg > 0:
+                return
+            else:
+                self.sched_idx = max(self.sched_idx - 1, 0)
+
+        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+            raise StopIteration
+
+    def _consume_trans(self, trans):
+        if len(self.data_hist) == 0:
+            self.data_hist.append(0)
+            self.trend_hist.append(0)
+        
+        last_data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
+
+        for x in trans:
+            data_avg = (1 - self.data_discount) * x + self.data_discount * (last_data_avg + trend_avg)
+            trend_avg = (1 - self.trend_discount) * (data_avg - last_data_avg) + self.trend_discount * trend_avg
+            last_data_avg = data_avg
+
+        self.data_hist.append(last_data_avg)
+        self.trend_hist.append(trend_avg)
+
+        self.logger.record('trajectory/data_avg', last_data_avg)
+        self.logger.record('trajectory/trend_avg', trend_avg)
 
 
 class AdaptiveOscTeacherCont(Teacher):

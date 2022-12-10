@@ -135,9 +135,6 @@ class TeacherDoubleExpAdaptive(Agent):
         curr_n, trans = state
         self._consume_trans(trans)
 
-        if len(self.data_hist) == 1:
-            return 1
-        
         data_avg = self.data_hist[-1]
         trend_avg = self.trend_hist[-1]
 
@@ -156,7 +153,6 @@ class TeacherDoubleExpAdaptive(Agent):
         if len(self.data_hist) == 0:
             self.data_hist.append(0)
             self.trend_hist.append(0)
-            return
         
         last_data_avg = self.data_hist[-1]
         trend_avg = self.trend_hist[-1]
@@ -166,7 +162,7 @@ class TeacherDoubleExpAdaptive(Agent):
             trend_avg = (1 - self.trend_discount) * (data_avg - last_data_avg) + self.trend_discount * trend_avg
             last_data_avg = data_avg
 
-        self.data_hist.append(data_avg)
+        self.data_hist.append(last_data_avg)
         self.trend_hist.append(trend_avg)
 
 

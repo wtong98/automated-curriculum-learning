@@ -104,7 +104,7 @@ if __name__ == '__main__':
         Case('Random', RandomTeacher),
         Case('Incremental', IncrementalTeacher),
         Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-        # Case('Adaptive (Exp)', AdaptiveExpTeacher),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
