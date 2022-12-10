@@ -109,18 +109,20 @@ if __name__ == '__main__':
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, max_steps=1000000, **case.teacher_params)
+            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
     df.to_pickle('plume_results.pkl')
+
+# %%
 
 # <codecell>
 '''
