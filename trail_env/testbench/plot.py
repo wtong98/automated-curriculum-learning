@@ -32,6 +32,8 @@ ax.set_xlabel('')
 ax.set_title(f'Meandering Trail Benchmark')
 
 plt.gcf().tight_layout()
+plt.savefig('fig/meander_bench.png')
+plt.clf()
 
 # <codecell>
 ### PLOT TRAJECTORIES
@@ -64,6 +66,8 @@ ax.set_xlabel('')
 ax.set_title(f'Plume Benchmark')
 
 plt.gcf().tight_layout()
+plt.savefig('fig/plume_bench.png')
+plt.clf()
 
 # <codecell>
 ### PLOT TRAJECTORIES
@@ -75,3 +79,4 @@ for k, row in df.iterrows():
             plt.plot(traj, color=f'C{k}', alpha=0.5)
 
 plt.legend()
+# %%

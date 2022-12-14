@@ -109,11 +109,11 @@ if __name__ == '__main__':
         (70, [(0.5, 0.61)]),
         (80, [(0.5, 0.6)]),
         (80, [(0.5, 0.61)]),
-        # (90, [(0.5, 0.6)]),
-        # (90, [(0.5, 0.61)]),
-        # (100, [(0.5, 0.6)]),
-        # (110, [(0.5, 0.6)]),
-        # (120, [(0.5, 0.6)]),
+        (90, [(0.5, 0.6)]),
+        (90, [(0.5, 0.61)]),
+        (100, [(0.5, 0.6)]),
+        (110, [(0.5, 0.6)]),
+        (120, [(0.5, 0.6)]),
         # (120, [(0.5, 0.61)]),
         # (120, [(0.5, 0.62)]),
         # (120, [(0.5, 0.63)]),
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        Case('Final', FinalTaskTeacher),
+        # Case('Final', FinalTaskTeacher),
         Case('Random', RandomTeacher),
         Case('Incremental', IncrementalTeacher),
         Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -149,7 +149,7 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1500000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         
