@@ -189,9 +189,9 @@ class FinalTaskTeacher(Teacher):
         self.sched_idx = self.sched_len - 1
     
     def _update_sched_idx(self):
-        _, prob = self.trajectory[-1]
-        self.sched_idx = self.sched_len - 1
+        assert self.sched_idx == self.sched_len - 1
 
+        _, prob = self.trajectory[-1]
         if prob > self.prob_threshold:
             raise StopIteration
 
@@ -225,6 +225,9 @@ class AdaptiveOscTeacher(Teacher):
         trans = self.history[self.sched_idx]
         _, prob = self.trajectory[-1]
 
+        if self.curr_idx == self.sched_len - 1 and prob > self.tau:
+            raise StopIteration
+
         if self.do_jump(trans):
             self.curr_idx = min(self.curr_idx + 1, self.sched_len - 1)
             self.sched_idx = self.curr_idx
@@ -237,8 +240,6 @@ class AdaptiveOscTeacher(Teacher):
             else:
                 self.sched_idx = self.curr_idx
         
-        if self.curr_idx == self.sched_len - 1 and prob > self.tau:
-            raise StopIteration
 
     def do_jump(self, trans):
         for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
@@ -275,6 +276,9 @@ class AdaptiveExpTeacher(Teacher):
         _, prob = self.trajectory[-1]
         self._consume_trans(self.trans)
 
+        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+            raise StopIteration
+
         if len(self.avgs) == 1:
             return
         
@@ -288,9 +292,6 @@ class AdaptiveExpTeacher(Teacher):
                 return
         elif avg < last_avg:
             self.sched_idx = max(self.sched_idx - 1, 0)
-
-        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
-            raise StopIteration
 
     def _consume_trans(self, trans):
         avg = self.avgs[-1] if len(self.avgs) > 0 else 0
@@ -426,9 +427,13 @@ class RandomTeacher(Teacher):
     def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.prob_threshold = tau
+        self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
+        if self.sched_idx < self.sched_len - 1:
+            prob = self._test_student(self.target_env)
+
         if prob > self.prob_threshold:
             raise StopIteration
         

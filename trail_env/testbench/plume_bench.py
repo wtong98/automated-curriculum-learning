@@ -90,7 +90,7 @@ class Case:
 if __name__ == '__main__':
     n_runs = 3
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
-    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15]
+    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25]
     # rates = [1, 0.9]
     sched = to_sched(rates)
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1500000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
 
