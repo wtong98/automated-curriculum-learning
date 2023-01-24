@@ -58,6 +58,7 @@ def to_sched(rates):
     trail_args = {
         'wind_speed': 5,
         'length_scale': 20,
+        'range': (-np.pi, np.pi)
     }
 
     sched = [dict(start_rate=r, max_steps='auto', **trail_args) for r in rates]
@@ -88,9 +89,10 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 3
+    n_runs = 1
+    # TODO: construct schedule more thoughtfully
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
-    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25]
+    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
     # rates = [1, 0.9]
     sched = to_sched(rates)
 
@@ -100,11 +102,11 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        Case('Final', FinalTaskTeacher),
-        Case('Random', RandomTeacher),
-        Case('Incremental', IncrementalTeacher),
-        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher),
+        # Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path': 'trained/rand'}),
+        # Case('Incremental', IncrementalTeacher),
+        # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        # Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={'save_every': 1, 'save_path': 'trained/adp_exp'}),
     ]
 
     for i in tqdm(range(n_runs)):
@@ -112,8 +114,9 @@ if __name__ == '__main__':
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
-            if 'save_path' in case.cb_params:
-                case.cb_params['save_path'] += f'/{i}'
+            # TODO: split each run into its own directory
+            # if 'save_path' in case.cb_params:
+            #     case.cb_params['save_path'] += f'/{i}'
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
             traj = [t[0] for t in traj]
@@ -156,8 +159,8 @@ if __name__ == '__main__':
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
 # TODO: mark odor along trajectory of agent
-save_path = Path('trained/plume_rate/0/')
-max_gen = 98
+save_path = Path('trained/adp_exp/')
+max_gen = 18
 
 # trail_args = {
 #     'length': 80,
@@ -167,7 +170,8 @@ max_gen = 98
 #     'reward_dist': -1,
 #     'range': (-np.pi, np.pi)
 # }
-trail_args = sched[-3]
+trail_args = sched[-1]
+trail = PlumeTrail(**trail_args)
 
 for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
     model_path = save_path / f'gen{i}'
@@ -184,7 +188,7 @@ for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
         env = TrailEnv(trail_map, discrete=True, treadmill=True)
 
         obs = env.reset()
-        for _ in range(100):
+        for _ in range(int(trail.max_steps)):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, is_done, _ = env.step(action)
 
@@ -219,7 +223,7 @@ for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
 
 
 # <codecell> SINGLE PROBE
-model_path = Path('trained/plume_rate/0/gen30.zip')
+model_path = Path('trained/adp_exp/gen_final.zip')
 
 trail_args = sched[-6]
 # trail_args['start_y'] = -40
@@ -274,7 +278,7 @@ ratio = (y_max - y_min) / (x_max - x_min)
 fig.set_size_inches(width, ratio*width)
 # fig.suptitle('Sample of agent runs')
 fig.tight_layout()
-plt.savefig('sample_plume.svg')
+# plt.savefig('sample_plume.svg')
 # plt.savefig('start_y_40.png')
 
 # <codecell>
@@ -345,4 +349,5 @@ for i in tqdm(range(n_samps)):
     #     pickle.dump(m, fp)
     
     plt.clf()
+
 '''

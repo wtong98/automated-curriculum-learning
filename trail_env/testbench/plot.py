@@ -32,10 +32,8 @@ ax.set_xlabel('')
 ax.set_title(f'Meandering Trail Benchmark')
 
 plt.gcf().tight_layout()
-# plt.savefig('fig/meander_bench.png')
+plt.savefig('fig/meander_bench.png')
 # plt.clf()
-
-# TODO: debug random <-- STOPPED HERE
 
 # <codecell>
 ### PLOT TRAJECTORIES
@@ -68,8 +66,8 @@ ax.set_xlabel('')
 ax.set_title(f'Plume Benchmark')
 
 plt.gcf().tight_layout()
-plt.savefig('fig/plume_bench.png')
-plt.clf()
+# plt.savefig('fig/plume_bench.png')
+# plt.clf()
 
 # <codecell>
 ### PLOT TRAJECTORIES
