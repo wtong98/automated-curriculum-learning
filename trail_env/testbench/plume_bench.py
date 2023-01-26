@@ -89,11 +89,16 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 1
-    # TODO: construct schedule more thoughtfully
+    n_runs = 3
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
-    rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
+    # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
     # rates = [1, 0.9]
+
+    # TODO: max steps on very small rates may be immense <-- STOPPED HERE
+    init_rate = 1
+    rate_decay = 0.6
+    n_rates = 4
+    rates = [init_rate * rate_decay ** n for n in range(n_rates)]
     sched = to_sched(rates)
 
     def env_fn(): return TrailEnv()
@@ -102,11 +107,13 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        # Case('Final', FinalTaskTeacher),
-        Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path': 'trained/rand'}),
-        # Case('Incremental', IncrementalTeacher),
-        # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        Case('Final', FinalTaskTeacher),
+        # Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path': 'trained/rand'}),
+        Case('Random', RandomTeacher),
+        Case('Incremental', IncrementalTeacher),
+        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={'save_every': 1, 'save_path': 'trained/adp_exp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
@@ -225,7 +232,7 @@ for i in tqdm(list(range(1, max_gen + 1)) + ['_final']):
 # <codecell> SINGLE PROBE
 model_path = Path('trained/adp_exp/gen_final.zip')
 
-trail_args = sched[-6]
+trail_args = sched[-1]
 # trail_args['start_y'] = -40
 model = PPO.load(model_path, device='cpu')
 

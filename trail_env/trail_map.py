@@ -369,7 +369,7 @@ class PlumeTrail(TrailMap):
 
         if max_steps == 'auto':
             assert start_rate != None
-            self.max_steps = np.round(4 * - self.y_min)
+            self.max_steps = np.round(3 * - self.y_min)
         else:
             self.max_steps = max_steps
     
@@ -443,9 +443,9 @@ class PlumeTrail(TrailMap):
             plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
     def reset(self):
+        self.heading = np.random.uniform(*self.range)
         if self.start_rate != None:
             self.start = self._sample_point(self.start_rate)
-        self.heading = np.random.uniform(*self.range)
     
     def __str__(self) -> str:
         return f'PlumeTrail(start={self.start}  rate={self.start_rate})'
@@ -455,6 +455,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(range=(-np.pi, np.pi), wind_speed=5, start_rate=0.4, length_scale=20, max_steps='auto')
+    trail = PlumeTrail(range=(-np.pi, np.pi), heading=None, wind_speed=5, start_rate=0.32, length_scale=20, max_steps='auto')
+    trail.reset()
     trail.plot()
 # %%

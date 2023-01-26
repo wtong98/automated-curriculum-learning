@@ -428,6 +428,7 @@ class RandomTeacher(Teacher):
         super().__init__(**teacher_kwargs)
         self.prob_threshold = tau
         self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
+        self.sched_idx = np.random.choice(self.sched_len)
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
