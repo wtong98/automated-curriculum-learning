@@ -285,3 +285,67 @@ for N in Ns:
         plt.legend()
         plt.savefig(fig_dir / f'N_{N}_eps_{e}.svg')
         plt.clf()
+
+# <codecell>
+### HETEROGENEOUS EPSILON
+
+n_iters = 10
+Ns = [3, 5, 10, 20]
+eps = np.linspace(-3, 2, num=6)
+sigs = [1, 3, 5]
+max_steps_fac = 400
+
+T = 3
+lr = 0.1
+
+all_cases = defaultdict(lambda: None)
+raw_data = []
+
+for N in tqdm(Ns):
+    for e in eps:
+        for s in sigs:
+            cases = [
+                Case('Incremental', run_incremental, {'eps': NormalDist(e, s), 'goal_length': N}, []),
+                Case('Adaptive (Osc)', run_adp_osc, {'eps': NormalDist(e, s), 'goal_length': N}, []),
+                Case('Adaptive (Exp)', run_adp_exp_disc, {'eps': NormalDist(e, s), 'goal_length': N}, []),
+            ]
+
+            run_exp(n_iters=n_iters, cases=cases, max_steps=N * max_steps_fac, lr=lr, T=T)
+            all_cases[(N, e, s)] = cases
+            raw_data.extend(cases)
+
+df = pd.DataFrame(raw_data)
+
+# <codecell>
+fig_dir = save_path / 'inc_v_adp_hetero_eps'
+if not fig_dir.exists():
+    fig_dir.mkdir(parents=True)
+
+def extract_plot_vals(row):
+    traj_lens = [len(traj) for traj in row['runs']]
+
+    return pd.Series([
+        row['name'],
+        row['run_params']['goal_length'],
+        np.round(row['run_params']['eps'].loc, decimals=2),
+        np.round(row['run_params']['eps'].scale, decimals=2),
+        traj_lens
+    ], index=['name', 'N', 'eps_loc', 'eps_scale', 'traj_lens'])
+
+
+plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
+
+for N in Ns:
+    for s in sigs:
+        curr_df = plot_df.loc[(plot_df['N'] == N) & (plot_df['eps_scale'] == s)]
+
+        ax = sns.barplot(curr_df, x='eps_loc', y='traj_lens', hue='name')
+        ax.get_legend().set_title(None)
+        ax.set_xlabel('Epsilon')
+        ax.set_ylabel('Iterations')
+        ax.set_yscale('log')
+        ax.set_title(rf'N = {N}, $\epsilon_\sigma = {s}$')
+        sns.move_legend(ax, 'upper right')
+
+        plt.savefig(fig_dir / f'N_{N}_sig_{s}.svg')
+        plt.clf()

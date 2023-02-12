@@ -21,6 +21,13 @@ class Case:
     runs: list = field(default_factory=list)
     info: list = field(default_factory=list)
 
+class NormalDist:
+    def __init__(self, loc=0, scale=1) -> None:
+        self.loc = loc
+        self.scale = scale
+    
+    def __call__(self):
+        return np.random.normal(loc=self.loc, scale=self.scale)
 
 def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
     gen = range(n_iters)
