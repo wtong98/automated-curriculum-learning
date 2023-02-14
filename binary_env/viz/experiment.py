@@ -324,3 +324,86 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
             print(e)
     
     return [0] * max_steps, {}
+
+
+"""Continuous algorithms"""
+def to_cont(N=3, eps=0, dn_per_interval=100):
+    prob = sig(eps) ** (1 / dn_per_interval)
+    eps_cont = np.log(prob / (1 - prob))
+    N_cont = N * dn_per_interval
+
+    return N_cont, eps_cont
+
+def run_incremental_perfect(eps=0, T=3, goal_length=3, n_step=100, lr=0.1, max_steps=1000, threshold=0.8):
+    N, e = to_cont(N=goal_length, eps=eps)
+    env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=e, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True)
+    env.reset()
+    traj = [env.N]
+    all_qr = []
+
+    for _ in range(max_steps):
+        qs = np.array([e + env.student.q_r[i] for i in range(N)])
+        while len(qs) > 0 and np.exp(np.sum(np.log(sig(qs)))) < threshold:
+            qs = qs[:-1]
+        
+        action = min(len(qs) + 1, N)
+        _, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+        
+        qr = qs - e
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr}
+
+
+def run_adp_cont(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, conf=0.2, tau=0.5, **kwargs):
+    N, e = to_cont(N=goal_length, eps=eps)
+    teacher = TeacherAdaptive(N, conf=conf, tau=tau, **kwargs)
+    env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=e, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True, return_transcript=True)
+    traj = [env.N]
+    env.reset()
+    all_qr = []
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = np.array([env.student.q_r[i] for i in range(N)])
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr}
+
+
+def run_adp_exp_cont(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **kwargs):
+    N, e = to_cont(N=goal_length, eps=eps)
+
+    splits = np.array([0.7, 0])
+    dec_to_idx = np.array([3, 7, 0, 2])
+    tree = TeacherTree(splits)
+    teacher = TeacherExpAdaptive(N, tree, dec_to_idx, **kwargs)
+    env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=e, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True, return_transcript=True)
+    traj = [env.N]
+    env.reset()
+    all_qr = []
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = np.array([env.student.q_r[i] for i in range(N)])
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr}

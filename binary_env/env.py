@@ -5,6 +5,7 @@ author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
 from collections import defaultdict
+import itertools
 from multiprocessing import Pool
 
 import numbers
@@ -144,6 +145,8 @@ class Agent:
         self.iter = 0
 
         iterator = range(max_iters)
+        if max_rounds != None:
+            iterator = itertools.count()
         if use_tqdm:
             iterator = tqdm(iterator)
 
@@ -384,6 +387,94 @@ class TeacherUncertainOsc(Agent):
         success = np.sum(transcript)
         total = len(transcript)
         prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
+        return 1 - prob_bad
+
+
+# TODO: clean up and work out rigorous tuning
+class TeacherAdaptive(Agent):
+    def __init__(self, goal_length, threshold=0.95, threshold_low=0.05, tau=0.5, conf=0.95, max_m_factor=3, abs_min_m=5, cut_factor=2, student=None, with_osc=False) -> None:
+        super().__init__()
+        self.goal_length = goal_length
+        self.threshold = threshold
+        self.threshold_low = threshold_low
+        self.tau = tau
+        self.conf = conf
+        self.student = student
+        self.with_osc = with_osc
+
+        p_eps = -np.log(threshold)
+        raw_min_m = int(np.round(np.log(1 - conf) / (-p_eps) - 1))
+        self.min_m = max(raw_min_m, abs_min_m)
+        self.max_m = self.min_m * max_m_factor
+
+        self.cut_factor = cut_factor
+        # self.prop_inc = goal_length // cut_factor
+        self.prop_inc = 100
+        self.inc = None
+        self.transcript = []
+        self.in_osc = False
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        if self.in_osc:
+            self.in_osc = False
+            return int(curr_n + self.inc)
+        else:
+            self.transcript.extend(trans)
+
+            if self.inc != None:   # incremental
+                next_n = curr_n
+                if len(self.transcript) > self.min_m:
+                    if self.do_jump():
+                        next_n = min(curr_n + self.inc, self.goal_length)
+                        return int(next_n)
+                    elif self.do_dive():
+                        next_n //= self.cut_factor
+                        self.inc = max(self.inc // 2, 1)
+                        return int(next_n)
+
+                if self.with_osc:
+                    self.in_osc = True
+                    return int(curr_n - self.inc)
+
+                return int(next_n)
+
+            elif len(self.transcript) > (self.min_m + self.max_m) // 2:   # binary search
+                next_n = self.prop_inc
+
+                if self.do_jump(thresh=self.tau):
+                    self.inc = self.prop_inc
+                    next_n = min(curr_n + self.inc, self.goal_length)
+                    self.transcript = []
+                else:
+                    self.prop_inc //= self.cut_factor
+                    next_n = self.prop_inc
+                    self.transcript = []
+
+                return int(next_n)
+            
+            return int(self.prop_inc)
+            
+    def do_jump(self, trans=None, thresh=None):
+        trans = self.transcript if trans == None else trans
+        for k in range(self.min_m, 1 + min(self.max_m, len(trans))):
+            prob_good = self._get_prob_good(trans[-k:], thresh=thresh)
+            if prob_good >= self.conf:
+                return True
+
+        return False
+
+    def do_dive(self):
+        rev_trans = [not bit for bit in self.transcript]
+        return self.do_jump(rev_trans, 1 - self.threshold_low)
+
+    def _get_prob_good(self, transcript, thresh=None):
+        if thresh == None:
+            thresh = self.threshold
+
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(thresh, a=success+1, b=total-success+1)
         return 1 - prob_bad
 
 
