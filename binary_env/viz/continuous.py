@@ -102,12 +102,12 @@ for _, row in tqdm(df.iterrows(), total=len(df)):
 
         fig, axs = plt.subplots(2, 1)
         axs[0].plot(traj)
-        axs[0].set_yticks(np.arange(N) + 1)
+        axs[0].set_yticks(np.arange(N) * 100)
         axs[0].set_xlim((0, len(traj)))
         axs[0].set_ylabel('N')
 
         axs[1].imshow(qr, aspect='auto')
-        axs[1].set_yticks(np.arange(N), np.flip(np.arange(N) + 1))
+        axs[1].set_yticks(np.arange(N) * 100, np.flip(np.arange(N) + 1))
         axs[1].set_ylabel('N')
         axs[1].set_xlabel('Iterations')
 

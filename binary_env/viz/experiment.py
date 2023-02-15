@@ -350,7 +350,7 @@ def run_incremental_perfect(eps=0, T=3, goal_length=3, n_step=100, lr=0.1, max_s
         _, _, is_done, _ = env.step(action)
         traj.append(env.N)
         
-        qr = qs - e
+        qr = np.array([env.student.q_r[i] for i in range(N)])
         all_qr.append(qr)
 
         if is_done:
