@@ -162,6 +162,7 @@ class TrainingTrailSet(TrailMap):  # TODO: test
         self.curr_trail = self._get_rand_trail()
 
 
+# TODO: scale length with max_steps
 class MeanderTrail(TrailMap):
     def __init__(self, length=50, 
                        width=3, 
@@ -335,6 +336,8 @@ class BrokenMeanderTrail(MeanderTrail):
 class PlumeTrail(TrailMap):
     def __init__(self, start=None,
                  start_rate=None,
+                 heading=None,
+                 range=(-np.pi/4, np.pi/4),
                  diffusivity=1,
                  emission_rate=1,
                  particle_lifetime=150,
@@ -352,6 +355,12 @@ class PlumeTrail(TrailMap):
         self.scale = np.sqrt((self.D * self.tau) / (1 + (self.V ** 2 * self.tau) / (4 * self.D)))
         self.base_rate = self.a * self.R
 
+        
+        self.range = range
+        if heading != None:
+            self.range = (heading, heading)
+        self.heading = np.random.uniform(*self.range)
+
         if start_rate:
             self.y_max, self.y_min = np.real(self._compute_y(start_rate))
             start = self._sample_point(start_rate)
@@ -360,7 +369,7 @@ class PlumeTrail(TrailMap):
 
         if max_steps == 'auto':
             assert start_rate != None
-            self.max_steps = np.round(4 * - self.y_min)
+            self.max_steps = np.round(3 * - self.y_min)
         else:
             self.max_steps = max_steps
     
@@ -371,10 +380,14 @@ class PlumeTrail(TrailMap):
         dist = np.real(self._compute_dist(rate, y))
         x = np.sqrt(dist ** 2 - y ** 2)
 
+        ang = -self.heading
+        rot = np.array([[np.cos(ang), -np.sin(ang)],
+                        [np.sin(ang),  np.cos(ang)]])
+
         if np.random.uniform() > 0.5:
-            return np.array((x, y))
+            return rot @ np.array((x, y))
         else:
-            return np.array((-x, y))
+            return rot @ np.array((-x, y))
 
     def _compute_dist(self, rate, y):
         arg = self.base_rate / (self.scale * rate) * np.exp(-(y * self.V) / (2 * self.D))
@@ -388,12 +401,16 @@ class PlumeTrail(TrailMap):
         y_plus = lambertw(fac_plus * self.base_rate / rate) / fac_plus
         y_minus = lambertw(fac_minus * self.base_rate / rate) / fac_minus
         return y_plus, -y_minus
-
+    
+    def _sample_wind_vec(self):
+        return np.array([-np.sin(self.heading), -np.cos(self.heading)]).reshape(-1, 1)
 
     def sample(self, x, y, return_rate=False):
         dist = np.linalg.norm(self.end - [x, y]) 
         dist_factor = np.exp(- dist / self.scale)
-        wind_factor = np.exp(-(y - self.end[1]) * self.V / (2 * self.D))
+
+        wind_dist = self._sample_wind_vec().T @ (self.end - np.array((x, y)))
+        wind_factor = np.exp(-wind_dist * self.V / (2 * self.D))
         rate = (self.base_rate / dist) * wind_factor * dist_factor
 
         # print('DIST', dist)
@@ -426,6 +443,7 @@ class PlumeTrail(TrailMap):
             plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
     def reset(self):
+        self.heading = np.random.uniform(*self.range)
         if self.start_rate != None:
             self.start = self._sample_point(self.start_rate)
     
@@ -437,6 +455,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(wind_speed=5, start_rate=1.1, length_scale=20, max_steps='auto')
+    trail = PlumeTrail(range=(-np.pi, np.pi), heading=None, wind_speed=5, start_rate=0.32, length_scale=20, max_steps='auto')
+    trail.reset()
     trail.plot()
 # %%

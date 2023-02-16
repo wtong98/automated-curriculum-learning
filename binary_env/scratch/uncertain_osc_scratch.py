@@ -12,6 +12,7 @@ import sys
 sys.path.append('../')
 
 from env import *
+from viz.experiment import run_adp_exp_disc
 
 class UncertainCurriculumEnv(CurriculumEnv):
     def __init__(self, *args, **kwargs):
@@ -119,7 +120,51 @@ class TeacherExpAdaptive(Agent):
         for x in trans:
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
+
+# TODO: implement for trail teacher
+class TeacherDoubleExpAdaptive(Agent):
+    def __init__(self, goal_length, data_discount=0.5, trend_discount=0.2):
+        self.goal_length = goal_length
+        self.data_discount = data_discount
+        self.trend_discount = trend_discount
+
+        self.data_hist = []
+        self.trend_hist = []
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self._consume_trans(trans)
+
+        data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
+
+        if data_avg > 0.8:
+            if trend_avg > 0:
+                return min(curr_n + 1, self.goal_length)
+            else:
+                return max(curr_n - 1, 1)
+        else:
+            if trend_avg > 0:
+                return curr_n
+            else:
+                return max(curr_n - 1, 1)
+    
+    def _consume_trans(self, trans):
+        if len(self.data_hist) == 0:
+            self.data_hist.append(0)
+            self.trend_hist.append(0)
         
+        last_data_avg = self.data_hist[-1]
+        trend_avg = self.trend_hist[-1]
+
+        for x in trans:
+            data_avg = (1 - self.data_discount) * x + self.data_discount * (last_data_avg + trend_avg)
+            trend_avg = (1 - self.trend_discount) * (data_avg - last_data_avg) + self.trend_discount * trend_avg
+            last_data_avg = data_avg
+
+        self.data_hist.append(last_data_avg)
+        self.trend_hist.append(trend_avg)
+
 
 def run_incremental(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr})
@@ -201,6 +246,28 @@ def run_adp_exp(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwa
     return traj
 
 
+de_teacher = None
+def run_adp_double_exp(eps=0, goal_length=3, T=3, max_steps=1000, lr=0.1, **teacher_kwargs):
+    global de_teacher
+
+    teacher = TeacherDoubleExpAdaptive(goal_length, **teacher_kwargs)
+    env = UncertainCurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
+    traj = [env.N]
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        if is_done:
+            break
+    
+    de_teacher = teacher
+    return traj
+
+
 teacher_cache = defaultdict(lambda: None)
 def run_dp(eps=0, goal_length=3, bins=100, T=3, lr=0.1, max_steps=500):
     global teacher_cache
@@ -249,7 +316,35 @@ def run_incremental_with_backtrack(eps=0, goal_length=3, T=3, lr=0.1, max_steps=
     
     return traj
 
+agent = None
 def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
+    global agent
+
+    agent = TeacherPomcpAgentClean(goal_length=N, 
+                            T=T, bins=10, p_eps=0.05, gamma=gamma, 
+                            n_particles=n_iters, q_reinv_prob=0.25)
+    env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
+    traj = [env.N]
+    prev_obs = env.reset()
+    prev_a = None
+
+    for _ in range(max_steps):
+        a = agent.next_action(prev_a, prev_obs)
+
+        state, _, is_done, _ = env.step(a)
+        traj.append(env.N)
+
+        obs = agent._to_bin(state[1])
+        prev_a = a
+        prev_obs = obs
+
+        if is_done:
+            break
+    
+    return traj
+
+
+def run_pomcp_old(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
     agent = TeacherPomcpAgent(goal_length=N, 
                             lookahead_cap=1, 
                             T=T, bins=10, p_eps=0.05, gamma=gamma, 
@@ -289,13 +384,13 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     
 
 # <codecell>
-n_iters = 5
+n_iters = 100
 T = 3
-N = 5
+N = 10
 lr = 0.1
-max_steps = 10000
+max_steps = 500
 bins = 10
-eps = -3
+eps = -1
 conf=0.2
 
 mc_iters = 1000
@@ -308,9 +403,12 @@ cases = [
     # Case('Incremental (w/ PBT)', run_incremental_with_partial_bt, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('Uncertain Osc', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf}, []),
     # Case('Uncertain Osc (w/ BT)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
-    Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    # Case('Oscillator', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': conf, 'with_backtrack': True, 'bt_conf': conf, 'bt_tau': 0.25}, []),
+    # Case('Oscillator (95)', run_osc, {'eps': eps, 'goal_length': N, 'lr': lr, 'confidence': 0.95, 'with_backtrack': True, 'bt_conf': 0.95, 'tau': 0.1, 'bt_tau': 0.02}, []),
     Case('Adaptive (Exp)', run_adp_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'discount': 0.8}, []),
-    # Case('POMCP', run_pomcp_with_retry, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    Case('Adaptive (Exp x2)', run_adp_double_exp, {'eps': eps, 'goal_length': N, 'lr': lr, 'data_discount': 0.8, 'trend_discount': 0.9}, []),
+    # Case('POMCP', run_pomcp, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
+    # Case('POMCP (old)', run_pomcp_old, {'eps': eps, 'goal_length': N, 'lr': lr}, []),
     # Case('MCTS', run_mcts, {'eps': eps, 'goal_length': N, 'lr': lr, 'n_iters': mc_iters}, []),
     # Case('DP', run_dp, {'eps': eps, 'goal_length': N, 'lr': lr, 'bins': bins}, []),
 ]
@@ -342,6 +440,8 @@ axs[1].set_ylabel('Iterations')
 
 fig.suptitle(f'Epsilon = {eps}')
 fig.tight_layout()
+
+# axs[0].set_xlim((0, 100))
 
 # plt.savefig(f'../fig/osc_ex_n_{N}_eps_{eps}.png')
 
