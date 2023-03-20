@@ -296,6 +296,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
                             n_particles=n_iters, q_reinv_prob=0.25)
     env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
     traj = [env.N]
+    all_qr = []
     prev_obs = env.reset()
     prev_a = None
 
@@ -305,6 +306,9 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
         state, _, is_done, _ = env.step(a)
         traj.append(env.N)
 
+        qr = [env.student.q_r[i] for i in range(goal_length)]
+        all_qr.append(qr)
+
         obs = agent._to_bin(state[1])
         prev_a = a
         prev_obs = obs
@@ -312,7 +316,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
         if is_done:
             break
     
-    return traj, {}
+    return traj, {'qr': all_qr}
 
 
 def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):

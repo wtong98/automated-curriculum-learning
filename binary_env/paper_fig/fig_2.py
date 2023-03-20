@@ -107,7 +107,7 @@ def plot_traj_and_qr(traj, qr, eps, save_path=None):
 
 
 N = 10
-eps = -0.5
+eps = 0
 traj, info = run_exp_inc(eps=eps, goal_length=N)
 plot_traj_and_qr(traj, info['qr'], eps, save_path='fig/fig2_middling_qr.png')
 
