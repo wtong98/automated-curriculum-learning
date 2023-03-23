@@ -324,6 +324,31 @@ class Teacher(Agent):
         plt.colorbar()
 
 
+class TeacherExpIncremental(Agent):
+    def __init__(self, tau=0.95, discount=0.8) -> None:
+        super().__init__()
+        self.tau = tau
+        self.discount = discount
+        self.avgs = []
+    
+    def next_action(self, state):
+        _, trans = state
+        self._consume_trans(trans)
+
+        if self.avgs[-1] > self.tau:
+            return 2
+        return 1
+    
+    def reset(self):
+        self.avgs = []
+
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
+
+
 class TeacherUncertainOsc(Agent):
     def __init__(self, goal_length, tau=0.95, conf=0.2, max_m_factor=3, with_backtrack=False, bt_tau=0.25, bt_conf=0.2) -> None:
         super().__init__()
