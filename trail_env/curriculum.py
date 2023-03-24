@@ -142,6 +142,8 @@ class Teacher:
             success_prob = self._test_student(self.eval_env)
             self.trajectory.append((self.sched_idx, success_prob))
             self.trans = self._interleave(self.training_env.get_attr('history'))
+            self.trans_avg = self._average(self.training_env.get_attr('history'))
+            print('AVG', self.trans_avg)
             self.history[self.sched_idx].extend(self.trans)
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
@@ -158,6 +160,10 @@ class Teacher:
     def _interleave(self, histories):
         all_hist = [h for h in chain.from_iterable(zip_longest(*histories)) if h != None]
         return all_hist
+    
+    def _average(self, histories):
+        all_hist = np.array(list(zip_longest(*histories, fillvalue=0)))
+        return np.mean(all_hist, axis=1)
     
     def clear_hist(self, sched_idx):
         del self.history[sched_idx]

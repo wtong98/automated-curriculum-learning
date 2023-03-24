@@ -91,7 +91,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 3
+    n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
@@ -133,10 +133,10 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        Case('Final', FinalTaskTeacher),
-        Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path':'trained/rand'}),
-        Case('Incremental', IncrementalTeacher),
-        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        # Case('Final', FinalTaskTeacher),
+        # Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path':'trained/rand'}),
+        # Case('Incremental', IncrementalTeacher),
+        # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 

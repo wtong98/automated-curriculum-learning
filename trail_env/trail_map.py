@@ -455,7 +455,13 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(range=(-np.pi, np.pi), heading=None, wind_speed=5, start_rate=0.32, length_scale=20, max_steps='auto')
-    trail.reset()
-    trail.plot()
+    # trail = PlumeTrail(range=(-np.pi, np.pi), heading=None, wind_speed=5, start_rate=0.32, length_scale=20, max_steps='auto')
+    trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
+    # trail.reset()
+
+# <codecell>
+    trail.plot(ymin=-10, ymax=150, xmin=-30, xmax=60)
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig('example_trail.svg')
 # %%

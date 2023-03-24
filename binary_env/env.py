@@ -1036,7 +1036,11 @@ class TeacherPomcpAgentClean(Agent):
         
         children = self.tree._traverse(self.history).children
         vals = [children[a].value['v'] for a in self.actions]
+        
         print('VALS', vals)
+        if np.all([v == 0 for v in vals]):
+            raise Exception('no values converged')
+
         return np.argmax(vals)
     
     def _simulate(self, state, history, depth):

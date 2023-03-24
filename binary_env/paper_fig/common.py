@@ -91,6 +91,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
 
     for _ in range(max_steps):
         a = agent.next_action(prev_a, prev_obs)
+        print('ACTION', a)
 
         state, _, is_done, _ = env.step(a)
         traj.append(env.N)

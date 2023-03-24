@@ -36,7 +36,7 @@ trail_args = {
 
 trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
-model = PPO.load('trained/osc_break/0/gen93', device='cpu')
+model = PPO.load('testbench/trained/meander_360_feb22', device='cpu')
 # model = PPO("CnnPolicy", env, verbose=1,
 #             n_steps=128,
 #             batch_size=256,
@@ -139,7 +139,7 @@ ani.save('fig/agent_movie_obs.gif')
 pi = model.policy
 all_actions = torch.arange(model.action_space.n)
 
-trail_map = trail_class(**trail_args, heading=-np.pi / 3)
+trail_map = trail_class(**trail_args, heading=0)
 env = TrailEnv(trail_map, discrete=global_discrete, treadmill=global_treadmill)
 
 @torch.no_grad()
@@ -166,26 +166,31 @@ cam = GradCAM(
 )
 
 obs = env.reset()
-for _ in range(100):
+for i in range(100):
     action, _ = model.predict(obs, deterministic=True)
     obs, reward, is_done, _ = env.step(action)
     print(reward)
 
     fig, axs = plt.subplots(1, 1, figsize=(8, 4))
-    ax1 = plt.subplot(121)
+    ax1 = plt.subplot(111)
     ax1.imshow(obs)
 
     obs_t, _ = pi.obs_to_tensor(obs)
     grayscale_cam = cam(input_tensor=obs_t)
-    ax1.imshow(grayscale_cam[0], alpha=0.5, cmap='bone')
+    # ax1.imshow(grayscale_cam[0], alpha=0.5, cmap='bone')
 
-    ax2 = plt.subplot(122)
-    value = plot_probs(obs, ax2)
+    # ax2 = plt.subplot(122)
+    # value = plot_probs(obs, ax2)
 
-    ax1.set_title(f'State value: {value.numpy()[0,0]:.2f}')
+    # ax1.set_title(f'State value: {value.numpy()[0,0]:.2f}')
+
+    plt.xticks([])
+    plt.yticks([])
 
     fig.tight_layout()
-    plt.show()
+
+    plt.savefig(f'tmp/ex_{i}.svg')
+    plt.clf()
 
     if is_done:
         print('done')
