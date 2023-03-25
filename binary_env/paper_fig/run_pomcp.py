@@ -17,29 +17,26 @@ n_iters = 3
 Ns = [3, 5, 10]
 eps = np.linspace(-2, 2, num=5)
 # n_iters = 1
-# Ns = [10]
-# eps = [-2]
+# Ns = [3]
+# eps = [2]
 
 T = 3
 lr = 0.1
     
 def run(case):
-    print('info: running case', case)
     run_exp(n_iters=n_iters, cases=[case], max_steps=min(N*100, 500), lr=lr, T=T)
+    return case
 
 if __name__ == '__main__':
     raw_data = []
 
     for N in Ns:
         for e in eps:
-            cases = [
-                Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'gamma':0.95}, []),
-            ]
-            raw_data.extend(cases)
+            raw_data.append(Case('POMCP', run_pomcp_with_retry, {'eps': e, 'goal_length': N, 'gamma':0.95}, []),)
 
     with Pool(n_procs) as p:
-        p.map(run, raw_data)
+        cases = p.map(run, raw_data)
 
-    df = pd.DataFrame(raw_data)
+    df = pd.DataFrame(cases)
     df.to_pickle('pomcp.pkl')
 

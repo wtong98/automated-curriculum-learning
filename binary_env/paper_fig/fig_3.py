@@ -76,9 +76,14 @@ for N in tqdm(Ns):
 
 df = pd.DataFrame(raw_data)
 
-
 # <codecell>
-fig_dir = Path('fig/us_v_matiisen')
+df_pomcp = pd.read_pickle('pomcp.pkl')
+df_pomcp
+
+
+# df = pd.concat((df, df_pomcp), ignore_index=True)
+# <codecell>
+fig_dir = Path('fig/us_v_matiisen_v_pomcp')
 if not fig_dir.exists():
     fig_dir.mkdir(parents=True)
 
