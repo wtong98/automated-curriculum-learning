@@ -344,6 +344,7 @@ class PlumeTrail(TrailMap):
                  wind_speed=1,
                  sensor_size=1,
                  length_scale=10,
+                 distance_factor=3,
                  max_steps=200):
         
         self.D = diffusivity * length_scale ** 2
@@ -355,6 +356,7 @@ class PlumeTrail(TrailMap):
         self.scale = np.sqrt((self.D * self.tau) / (1 + (self.V ** 2 * self.tau) / (4 * self.D)))
         self.base_rate = self.a * self.R
 
+        self.distance_factor = distance_factor
         
         self.range = range
         if heading != None:
@@ -376,7 +378,10 @@ class PlumeTrail(TrailMap):
 
     # TODO: sample uniformly across whole level set
     def _sample_point(self, rate):
-        y = np.random.uniform(self.y_min, self.y_max)
+        uppr = self.y_max
+        if self.distance_factor:
+            uppr = self.y_min * (1 - 1 / self.distance_factor)
+        y = np.random.uniform(self.y_min, uppr)
         dist = np.real(self._compute_dist(rate, y))
         x = np.sqrt(dist ** 2 - y ** 2)
 
@@ -455,13 +460,13 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    # trail = PlumeTrail(range=(-np.pi, np.pi), heading=None, wind_speed=5, start_rate=0.32, length_scale=20, max_steps='auto')
-    trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
+    trail = PlumeTrail(range=(-np.pi/4, np.pi/4), heading=None, wind_speed=5, start_rate=0.5, length_scale=20, distance_factor=3, max_steps='auto')
+    # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
-# <codecell>
-    trail.plot(ymin=-10, ymax=150, xmin=-30, xmax=60)
+    trail.reset()
+    trail.plot()
     plt.xticks([])
     plt.yticks([])
-    plt.savefig('example_trail.svg')
+    # plt.savefig('example_trail.svg')
 # %%

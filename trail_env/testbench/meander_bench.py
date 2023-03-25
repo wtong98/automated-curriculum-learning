@@ -91,23 +91,32 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 1
+    n_runs = 3
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
         # (10, []),
         # (15, []),
-
+        
         (10, [(0.5, 0.6)]),
-        (20, [(0.5, 0.6)]),
         (30, [(0.5, 0.6)]),
-        (40, [(0.5, 0.6)]),
         (50, [(0.5, 0.6)]),
-        (60, [(0.5, 0.6)]),
-        (60, [(0.5, 0.61)]),
         (70, [(0.5, 0.6)]),
-        (70, [(0.5, 0.61)]),
-        (80, [(0.5, 0.6)]),
+        (90, [(0.5, 0.6)]),
+        # (85, [(0.5, 0.6)]),
+
+        # (10, [(0.5, 0.6)]),
+        # (20, [(0.5, 0.6)]),
+        # (30, [(0.5, 0.6)]),
+        # (40, [(0.5, 0.6)]),
+        # (50, [(0.5, 0.6)]),
+        # (60, [(0.5, 0.6)]),
+        # (60, [(0.5, 0.61)]),
+        # (70, [(0.5, 0.6)]),
+        # (70, [(0.5, 0.61)]),
+        # (80, [(0.5, 0.6)]),
+
+
         # (80, [(0.5, 0.61)]),
         # (90, [(0.5, 0.6)]),
         # (90, [(0.5, 0.61)]),
@@ -133,11 +142,11 @@ if __name__ == '__main__':
     eval_env = env_fn()
     
     cases = [
-        # Case('Final', FinalTaskTeacher),
-        # Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path':'trained/rand'}),
-        # Case('Incremental', IncrementalTeacher),
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         Case('Adaptive (Exp)', AdaptiveExpTeacher),
+        Case('Incremental', IncrementalTeacher),
+        # Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
@@ -149,7 +158,7 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         

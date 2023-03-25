@@ -111,8 +111,8 @@ class Teacher:
         else:
             self.sched = sched
 
-        self.n_iters_per_ckpt = 2000
-        self.n_test_episodes = 25
+        self.n_iters_per_ckpt = 1000
+        self.n_test_episodes = 5
         self.student = None
         self.eval_env = None
         self.fresh = True
@@ -148,6 +148,7 @@ class Teacher:
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
                 self.logger.record('trajectory/success_prob', success_prob)
+                self.logger.record('trajectory/average', np.mean(self.trans))
             self._update_sched_idx()
         else:
             self.fresh = False   # not fresh after first iteration
@@ -162,8 +163,12 @@ class Teacher:
         return all_hist
     
     def _average(self, histories):
-        all_hist = np.array(list(zip_longest(*histories, fillvalue=0)))
-        return np.mean(all_hist, axis=1)
+        avgs = []
+        for hist in zip_longest(*histories):
+            hs = [h for h in hist if h != None]
+            avgs.append(np.mean(hs))
+
+        return avgs
     
     def clear_hist(self, sched_idx):
         del self.history[sched_idx]
@@ -203,17 +208,34 @@ class FinalTaskTeacher(Teacher):
 
 
 class IncrementalTeacher(Teacher):
-    def __init__(self, tau=0.95, **teacher_kwargs):
+    def __init__(self, tau=0.95, use_avg=True, discount=0.8, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
+        self.discount = discount
         self.prob_threshold = tau
+        self.use_avg = use_avg
+        self.avgs = []
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
 
-        if prob > self.prob_threshold:
-            self.sched_idx += 1
-            if self.sched_idx >= self.sched_len:
-                raise StopIteration
+        if self.sched_idx == self.sched_len - 1 and prob > self.prob_threshold:
+            raise StopIteration
+        
+        trans = self.trans
+        if self.use_avg:
+            trans = self.trans_avg
+
+        self._consume_trans(trans)
+
+        if self.avgs[-1] > self.prob_threshold:
+            self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
+
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
+        self.logger.record('trajectory/exp_avg', avg)
 
 
 class AdaptiveOscTeacher(Teacher):
@@ -272,15 +294,21 @@ class AdaptiveOscTeacher(Teacher):
 
 
 class AdaptiveExpTeacher(Teacher):
-    def __init__(self, tau=0.95, discount=0.9, **teacher_kwargs):
+    def __init__(self, tau=0.95, discount=0.8, use_avg=True, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.tau = tau
         self.discount = discount
+        self.use_avg = use_avg
         self.avgs = []
 
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
-        self._consume_trans(self.trans)
+
+        trans = self.trans
+        if self.use_avg:
+            trans = self.trans_avg
+
+        self._consume_trans(trans)
 
         if self.sched_idx == self.sched_len - 1 and prob > self.tau:
             raise StopIteration
