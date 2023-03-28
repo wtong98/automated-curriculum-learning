@@ -99,7 +99,7 @@ class ManualTeacher:
 
 
 class Teacher:
-    def __init__(self, sched=None, trail_class=None):
+    def __init__(self, n_iters_per_ckpt=1000, sched=None, trail_class=None):
         self.trail_class = trail_class if trail_class != None else MeanderTrail
 
         self.sched_idx = 0
@@ -111,8 +111,8 @@ class Teacher:
         else:
             self.sched = sched
 
-        self.n_iters_per_ckpt = 1000
-        self.n_test_episodes = 5
+        self.n_iters_per_ckpt = n_iters_per_ckpt
+        self.n_test_episodes = 10
         self.student = None
         self.eval_env = None
         self.fresh = True
@@ -166,8 +166,13 @@ class Teacher:
         avgs = []
         for hist in zip_longest(*histories):
             hs = [h for h in hist if h != None]
-            avgs.append(np.mean(hs))
 
+            # truncate outlier averages
+            if len(hs) < len(hist) // 2: 
+                break
+
+            avgs.append(np.mean(hs))
+        
         return avgs
     
     def clear_hist(self, sched_idx):
@@ -208,18 +213,30 @@ class FinalTaskTeacher(Teacher):
 
 
 class IncrementalTeacher(Teacher):
-    def __init__(self, tau=0.95, use_avg=True, discount=0.8, **teacher_kwargs):
+    def __init__(self, tau=0.95, use_avg=True, discount=0.8, decision_point=None, aggressive_checking=False, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.discount = discount
         self.prob_threshold = tau
+        self.decision_point = tau if decision_point == None else decision_point
         self.use_avg = use_avg
+        self.aggressive_checking = aggressive_checking
         self.avgs = []
+
+        if aggressive_checking:
+            self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
 
-        if self.sched_idx == self.sched_len - 1 and prob > self.prob_threshold:
-            raise StopIteration
+        if self.aggressive_checking:
+            if self.sched_idx < self.sched_len - 1:
+                prob = self._test_student(self.target_env)
+
+            if prob > self.prob_threshold:
+                raise StopIteration
+        else:
+            if self.sched_idx == self.sched_len - 1 and prob > self.prob_threshold:
+                raise StopIteration
         
         trans = self.trans
         if self.use_avg:
@@ -227,7 +244,7 @@ class IncrementalTeacher(Teacher):
 
         self._consume_trans(trans)
 
-        if self.avgs[-1] > self.prob_threshold:
+        if self.avgs[-1] > self.decision_point:
             self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
 
     def _consume_trans(self, trans):
@@ -294,12 +311,17 @@ class AdaptiveOscTeacher(Teacher):
 
 
 class AdaptiveExpTeacher(Teacher):
-    def __init__(self, tau=0.95, discount=0.8, use_avg=True, **teacher_kwargs):
+    def __init__(self, tau=0.95, discount=0.8, decision_point=0.7, use_avg=True, aggressive_checking=False, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.tau = tau
         self.discount = discount
         self.use_avg = use_avg
+        self.decision_point = decision_point
         self.avgs = []
+        self.aggressive_checking = aggressive_checking
+
+        if aggressive_checking:
+            self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
 
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
@@ -310,15 +332,22 @@ class AdaptiveExpTeacher(Teacher):
 
         self._consume_trans(trans)
 
-        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
-            raise StopIteration
+        if self.aggressive_checking:
+            if self.sched_idx < self.sched_len - 1:
+                prob = self._test_student(self.target_env)
+
+            if prob > self.tau:
+                raise StopIteration
+        else:
+            if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+                raise StopIteration
 
         if len(self.avgs) == 1:
             return
         
         avg, last_avg = self.avgs[-1], self.avgs[-2]
 
-        if avg > 0.7:
+        if avg > self.decision_point:
             if avg >= last_avg:
                 self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
             else:

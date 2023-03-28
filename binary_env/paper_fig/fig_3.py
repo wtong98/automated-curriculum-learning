@@ -46,8 +46,8 @@ for e in eps:
 # TODO: tune Matiisen params
 
 n_iters = 10
-Ns = [3, 5, 10, 20]
-eps = np.linspace(-4, 2, num=7)
+Ns = [3, 5, 10]
+eps = np.linspace(-2, 2, num=5)
 # max_steps = 500
 
 T = 3
@@ -81,7 +81,7 @@ df_pomcp = pd.read_pickle('pomcp.pkl')
 df_pomcp
 
 
-# df = pd.concat((df, df_pomcp), ignore_index=True)
+df = pd.concat((df_pomcp, df), ignore_index=True)
 # <codecell>
 fig_dir = Path('fig/us_v_matiisen_v_pomcp')
 if not fig_dir.exists():
@@ -105,9 +105,11 @@ for N in Ns:
     ax = sns.barplot(plot_df, x='eps', y='traj_lens', hue='name')
     ax.get_legend().set_title(None)
     ax.set_xlabel('Epsilon')
-    ax.set_ylabel('Iterations')
+    ax.set_ylabel('Steps')
     ax.set_title(f'N = {N}')
     sns.move_legend(ax, 'upper right')
 
     plt.savefig(fig_dir / f'N_{N}.svg')
     plt.clf()
+
+# %%

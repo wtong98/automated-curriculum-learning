@@ -34,22 +34,26 @@ def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
             case.info.append(info)
 
 
-def plot_traj_and_qr(traj, qr, eps, N, save_path=None):
-    plt.clf()
-    plt.gcf().set_size_inches(8, 3)
+def plot_traj_and_qr(traj, qr, eps, N, ax=None, save_path=None):
+    if ax == None:
+        plt.clf()
+        plt.gcf().set_size_inches(8, 3)
+        ax = plt.gca()
 
     qr = np.array(qr)
     qr = np.flip(qr.T, axis=0) + eps
-    plt.imshow(qr, aspect='auto', vmin=0, vmax=10)
-    plt.yticks(np.arange(N), np.flip(np.arange(N) + 1))
-    plt.ylabel('N')
-    plt.xlabel('Steps')
-    plt.title(fr'$\epsilon = {eps}$')
+    im = ax.imshow(qr, aspect='auto', vmin=0, vmax=10)
+    ax.set_yticks(np.arange(N), np.flip(np.arange(N) + 1))
+    ax.set_ylabel('N')
+    ax.set_xlabel('Steps')
+    ax.set_title(fr'$\epsilon = {eps}$')
 
-    plt.colorbar()
+    plt.colorbar(im, ax=ax)
 
-    plt.plot(10 - np.array(traj), color='red')
-    plt.xlim((0, len(traj) - 1.5))
+    ax.plot(10 - np.array(traj)[1:] - 0.425, color='red')
+    ax.set_xlim((0, len(traj) - 1.5))
+
+    plt.gcf().tight_layout()
 
     if save_path:
         plt.savefig(save_path)

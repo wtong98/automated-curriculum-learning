@@ -9,6 +9,8 @@ sys.path.append('../')
 from common import *
 from env import *
 
+# <codecell>
+
 eps = np.linspace(-5, 4, num=25)
 N = 10
 
@@ -41,18 +43,37 @@ plt.savefig('fig/fig2_inc_failure.png')
 N = 10
 eps = 0
 traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, save_path='fig/fig2_middling_qr.png')
+plot_traj_and_qr(traj, info['qr'], eps, N, save_path='fig/fig2_middling_qr.png')
 
 # <codecell>
 N = 10
 eps = -2
 traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, save_path='fig/fig2_failure_qs.png')
+plot_traj_and_qr(traj, info['qr'], eps, N, save_path='fig/fig2_failure_qr.png')
 
 # <codecell>
 N = 10
 eps = 2
 traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, save_path='fig/fig2_success_qr.png')
+plot_traj_and_qr(traj, info['qr'], eps, N, save_path='fig/fig2_success_qr.png')
 
-# %%
+# <codecell>
+### SAME AS ABOVE, BUT CONJOINED
+fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+
+N = 10
+eps = 0
+traj, info = run_exp_inc(eps=eps, goal_length=N)
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1])
+
+N = 10
+eps = -2
+traj, info = run_exp_inc(eps=eps, goal_length=N)
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2])
+
+N = 10
+eps = 2
+traj, info = run_exp_inc(eps=eps, goal_length=N)
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0])
+
+plt.savefig('fig/inc_fail_conjoined.png')

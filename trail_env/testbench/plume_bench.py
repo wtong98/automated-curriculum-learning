@@ -89,43 +89,55 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 3
+    n_runs = 1
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
     # rates = [1, 0.9]
 
-    # TODO: max steps on very small rates may be immense <-- STOPPED HERE
-    init_rate = 1
-    rate_decay = 0.6
-    n_rates = 4
-    rates = [init_rate * rate_decay ** n for n in range(n_rates)]
+    # init_rate = 1
+    # rate_decay = 0.75
+    # n_rates = 6
+    # rates = [init_rate * rate_decay ** n for n in range(n_rates)]
+
+    init_rate = 0.5
+    rate_jump = 0.1
+    n_rates = 24
+    inv_rates = [init_rate + i * rate_jump for i in range(n_rates)]
+    rates = [1 / r for r in inv_rates]
+    # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
+    print('RATES', rates)
     sched = to_sched(rates)
+
+    print([PlumeTrail(**s).y_min for s in sched])
 
     def env_fn(): return TrailEnv()
 
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
     
+    discount = 0.8
+    n_iters_per_ckpt = 500
+
     cases = [
-        Case('Final', FinalTaskTeacher),
-        # Case('Random', RandomTeacher, cb_params={'save_every': 1, 'save_path': 'trained/rand'}),
+        # Case('Final', FinalTaskTeacher),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.2, 'aggressive_checking': True}),
+        Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
         Case('Random', RandomTeacher),
-        Case('Incremental', IncrementalTeacher),
-        Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
+        # Case('Random', RandomTeacher),
+        # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={'save_every': 1, 'save_path': 'trained/adp_exp'}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
-            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, **case.teacher_params)
+            teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
             # TODO: split each run into its own directory
             # if 'save_path' in case.cb_params:
             #     case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1000000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
 
