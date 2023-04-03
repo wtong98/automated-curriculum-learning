@@ -235,7 +235,8 @@ def run_naive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=
             all_scores.append(np.exp(score))
         res = linregress(range(k), all_scores)
 
-        reward = res.slope - xs[task_idx]
+        # reward = res.slope - xs[task_idx]
+        reward = res.slope
         qs[task_idx] = alpha * reward + (1 - alpha) * qs[task_idx]
         xs[task_idx] = reward
 
@@ -277,7 +278,8 @@ def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta
         res = linregress(all_times[task_idx], all_scores[task_idx])
 
         slope = res.slope if not np.isnan(res.slope) else 0
-        reward = slope - xs[task_idx]
+        # reward = slope - xs[task_idx]
+        reward = slope
         qs[task_idx] = alpha * reward + (1 - alpha) * qs[task_idx]
         xs[task_idx] = reward
 

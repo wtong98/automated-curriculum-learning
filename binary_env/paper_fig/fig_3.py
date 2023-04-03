@@ -42,6 +42,19 @@ for e in eps:
 
 
 # <codecell>
+### Adaptive Exp conjoined
+fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+
+N = 10
+eps = [2, 0, -2]
+
+for e, ax in zip(eps, axs):
+    traj, info = run_adp_exp_disc(eps=e, goal_length=N)
+    plot_traj_and_qr(traj, info['qr'], e, N, ax=ax)
+
+plt.savefig('fig/adp_conjoined.png')
+
+# <codecell>
 ### BENCHMARK: Us vs. Matiisen
 # TODO: tune Matiisen params
 
@@ -113,3 +126,38 @@ for N in Ns:
     plt.clf()
 
 # %%
+### POMCP plots
+df = pd.read_pickle('pomcp.pkl')
+
+# <codecell>
+for _, run in tqdm(df.iterrows(), total=len(df)):
+    params = run['run_params']
+    eps = params['eps']
+    N = params['goal_length']
+
+    if N == 10:
+        for i, (traj, info) in enumerate(zip(run.runs, run['info'])):
+            plot_traj_and_qr(traj, info['qr'], eps, N, save_path=f'fig/pomcp/pomcp_N={N}_eps={eps}_id={i}.png')
+
+# <codecell>
+fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+
+N = 10
+eps = -2
+row = df.loc[10]
+traj, info = row['runs'][0], row['info'][0]
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2])
+
+N = 10
+eps = 0
+row = df.loc[12]
+traj, info = row['runs'][0], row['info'][0]
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1])
+
+N = 10
+eps = 2
+row = df.loc[14]
+traj, info = row['runs'][0], row['info'][0]
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0])
+
+plt.savefig('fig/pomcp_conjoined.png')
