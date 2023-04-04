@@ -91,7 +91,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 1
+    n_runs = 5
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
@@ -145,9 +145,9 @@ if __name__ == '__main__':
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         Case('Adaptive (Exp)', AdaptiveExpTeacher),
-        Case('Random', RandomTeacher),
         Case('Incremental', IncrementalTeacher),
-        # Case('Final', FinalTaskTeacher),
+        Case('Random', RandomTeacher),
+        Case('Final', FinalTaskTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
@@ -159,7 +159,7 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         

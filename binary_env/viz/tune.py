@@ -13,6 +13,7 @@ import pandas as pd
 
 from experiment import *
 
+
 n_procs = 48
 
 eps = [-2, -1, 0, 1, 2]
@@ -62,6 +63,7 @@ class Case:
 params = list([(a, b) for a in alphas for b in betas])
 params_with_k = list([(a, b, k) for a in alphas for b in betas for k in ks])
 
+# <codecell>
 if __name__ == '__main__':
     cases = [
         Case(proc_run_online, name='online', params=params),
@@ -88,3 +90,10 @@ if __name__ == '__main__':
 
 
 # %%
+# df = pd.read_pickle('remote/matiisen_params.pkl')
+# df = df.drop('f', axis=1)
+# df.loc[3]['best_params']['k'] = 1
+# del df.loc[3]['best_params']['beta']
+
+# df.to_pickle('remote/matiisen_params_clean.pkl')
+
