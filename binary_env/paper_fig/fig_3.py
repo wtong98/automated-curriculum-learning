@@ -110,6 +110,7 @@ def extract_plot_vals(row):
         traj_lens
     ], index=['name', 'N', 'eps', 'traj_lens'])
 
+# <codecell>
 
 for N in Ns:
     plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
@@ -124,6 +125,17 @@ for N in Ns:
 
     plt.savefig(fig_dir / f'N_{N}.svg')
     plt.clf()
+
+# <codecell>
+### BENCHMARK CONJOINED
+plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
+
+g = sns.catplot(plot_df, x='eps', y='traj_lens', hue='name', col='N', kind='bar', sharey=False, height=3, aspect=1.4)
+g.set_axis_labels(f'$\epsilon$', 'Steps')
+g.legend.set_title('')
+
+plt.savefig('fig/us_v_matiisen_v_pomcp/seq_benchmarks_conjoined.png')
+
 
 # %%
 ### POMCP plots

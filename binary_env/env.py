@@ -86,7 +86,7 @@ class CurriculumEnv(gym.Env):
     
     def step(self, action):
         if self.anarchy_mode:
-            self.N = action
+            self.N = np.clip(action, 1, self.goal_length)
         else:
             d_length = action - 1
             self.N = np.clip(self.N + d_length, 1, self.goal_length)

@@ -2,6 +2,7 @@
 Common utils useful for making these plots
 """
 
+# <codecell>
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -34,7 +35,7 @@ def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
             case.info.append(info)
 
 
-def plot_traj_and_qr(traj, qr, eps, N, ax=None, save_path=None):
+def plot_traj_and_qr(traj, qr, eps, N, n_step=1, ax=None, save_path=None):
     if ax == None:
         plt.clf()
         plt.gcf().set_size_inches(8, 3)
@@ -43,14 +44,17 @@ def plot_traj_and_qr(traj, qr, eps, N, ax=None, save_path=None):
     qr = np.array(qr)
     qr = np.flip(qr.T, axis=0) + eps
     im = ax.imshow(qr, aspect='auto', vmin=0, vmax=10)
-    ax.set_yticks(np.arange(N), np.flip(np.arange(N) + 1))
+
+    ticks = np.arange(N) * n_step
+    ax.set_yticks(ticks, np.flip(np.arange(N) + 1))
     ax.set_ylabel('N')
     ax.set_xlabel('Steps')
     ax.set_title(fr'$\epsilon = {eps}$')
 
     plt.colorbar(im, ax=ax)
 
-    ax.plot(10 - np.array(traj)[1:] - 0.425, color='red')
+    adj = -0.425 if n_step == 1 else 2.75
+    ax.plot(10 * n_step - np.array(traj)[1:] + adj, color='red')
     ax.set_xlim((0, len(traj) - 1.5))
 
     plt.gcf().tight_layout()
@@ -150,7 +154,10 @@ def run_adp_exp_disc(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
     return traj, {'qr': all_qr}
 
 
-def run_random(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
+def run_random(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1, is_cont=False):
+    if is_cont:
+        goal_length, eps = to_cont(goal_length, eps)
+    
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -167,9 +174,13 @@ def run_random(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
     return traj, {}
 
 
-def run_final_task_only(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
+def run_final_task_only(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1, is_cont=False):
+    if is_cont:
+        goal_length, eps = to_cont(goal_length, eps)
+
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
+    env.N = goal_length
     traj = [env.N]
 
     for _ in range(max_steps):
@@ -324,3 +335,75 @@ def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, k=
             break
 
     return traj, {'qs': all_qs}
+
+
+"""Continuous algorithms"""
+def to_cont(N=3, eps=0, dn_per_interval=100):
+    prob = sig(eps) ** (1 / dn_per_interval)
+    eps_cont = np.log(prob / (1 - prob))
+    N_cont = N * dn_per_interval
+
+    return N_cont, eps_cont
+
+# TODO: tune
+def run_exp_cont(eps=0, goal_length=3, n_step=100, T=3, lr=0.1, max_steps=500, **kwargs):
+    N, e = to_cont(N=goal_length, eps=eps, dn_per_interval=n_step)
+
+    splits = np.array([0.7, 0])
+    dec_to_idx = np.array([3, 7, 0, 2])
+    tree = TeacherTree(splits)
+    teacher = TeacherExpAdaptive(N, tree, dec_to_idx, **kwargs)
+
+    env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=e, train_round=T, student_params={'lr': lr, 'n_step': 100}, anarchy_mode=True, return_transcript=True)
+    env.reset()
+    env.N = n_step
+    traj = [env.N]
+    all_qr = []
+
+    obs = (n_step, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = np.array([env.student.q_r[i] for i in range(N)])
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr}
+
+def run_inc_cont(eps=0, T=3, goal_length=3, n_step=100, lr=0.1, max_steps=500, **teacher_kwargs):
+    N, e = to_cont(N=goal_length, eps=eps, dn_per_interval=n_step)
+
+    teacher = TeacherExpIncremental(**teacher_kwargs)
+    env = CurriculumEnv(goal_length=N, student_reward=10, student_qe_dist=e, train_round=T, student_params={'lr': lr, 'n_step': n_step}, anarchy_mode=True, return_transcript=True)
+    env.reset()
+    env.N = n_step
+    traj = [env.N]
+    all_qr = []
+
+    obs = (n_step, [])
+    for _ in range(max_steps):
+        a = teacher.next_action(obs)
+        diff = (a - 1) * n_step
+        action = env.N + diff
+        
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = [env.student.q_r[i] for i in range(N)]
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr, 'teacher': teacher}
+
+
+# traj, info = run_inc_cont(goal_length=10, eps=2)
+# plt.plot(traj)
+
+# traj, info = run_exp_cont(goal_length=10, eps=-2)
+# plt.plot(traj)
