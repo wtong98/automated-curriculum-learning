@@ -231,6 +231,7 @@ def cb(xk, **kwargs):
 
 dec_map = [0, 1, 0, 2]
 
+# TODO: implement coordinated, greedy ascent across varying N's and eps's
 for _ in range(3):
     result = differential_evolution(run, args=(dec_map,), bounds=[(0, 1), (-1, 1)], workers=-1, updating='deferred', maxiter=5, callback=cb)
     all_maps = list(sample_map(np.array(result.x)))

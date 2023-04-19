@@ -36,7 +36,7 @@ def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
 
 
 def plot_traj_and_qr(traj, qr, eps, N, n_step=1, ax=None, save_path=None):
-    if ax == None:
+    if type(ax) == type(None):
         plt.clf()
         plt.gcf().set_size_inches(8, 3)
         ax = plt.gca()
@@ -62,6 +62,15 @@ def plot_traj_and_qr(traj, qr, eps, N, n_step=1, ax=None, save_path=None):
     if save_path:
         plt.savefig(save_path)
 
+def plot_traj_slices(qr, ax, eps, n_steps=1):
+    qr = np.array(qr) + eps
+
+    for i in [0, 2, 4, 7, 9]:
+        ax.plot(qr[:,i*n_steps + n_steps - 1], label=f'N = {i+1}', alpha=i/15 + 0.35, color='C0')
+
+    ax.set_xlabel('Step')
+    ax.set_ylabel(r'Q value')
+    ax.legend()
 
 def run_exp_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
     teacher = TeacherExpIncremental(**teacher_kwargs)

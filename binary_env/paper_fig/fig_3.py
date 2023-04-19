@@ -43,14 +43,15 @@ for e in eps:
 
 # <codecell>
 ### Adaptive Exp conjoined
-fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+fig, axs = plt.subplots(3, 2, figsize=(9, 8))
 
 N = 10
 eps = [2, 0, -2]
 
 for e, ax in zip(eps, axs):
     traj, info = run_adp_exp_disc(eps=e, goal_length=N)
-    plot_traj_and_qr(traj, info['qr'], e, N, ax=ax)
+    plot_traj_and_qr(traj, info['qr'], e, N, ax=ax[0])
+    plot_traj_slices(info['qr'], ax[1], e)
 
 plt.savefig('fig/adp_conjoined.png')
 
@@ -152,24 +153,29 @@ for _, run in tqdm(df.iterrows(), total=len(df)):
             plot_traj_and_qr(traj, info['qr'], eps, N, save_path=f'fig/pomcp/pomcp_N={N}_eps={eps}_id={i}.png')
 
 # <codecell>
-fig, axs = plt.subplots(3, 1, figsize=(5, 8))
-
-N = 10
-eps = -2
-row = df.loc[10]
-traj, info = row['runs'][0], row['info'][0]
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2])
-
-N = 10
-eps = 0
-row = df.loc[12]
-traj, info = row['runs'][0], row['info'][0]
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1])
+fig, axs = plt.subplots(3, 2, figsize=(9, 8), sharey=False)
 
 N = 10
 eps = 2
 row = df.loc[14]
 traj, info = row['runs'][0], row['info'][0]
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0])
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0][0])
+plot_traj_slices(info['qr'], ax=axs[0][1], eps=eps)
+
+N = 10
+eps = 0
+row = df.loc[12]
+traj, info = row['runs'][0], row['info'][0]
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1][0])
+plot_traj_slices(info['qr'], ax=axs[1,1], eps=eps)
+
+N = 10
+eps = -2
+row = df.loc[10]
+traj, info = row['runs'][0], row['info'][0]
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2,0])
+plot_traj_slices(info['qr'], ax=axs[2,1], eps=eps)
+
+fig.tight_layout()
 
 plt.savefig('fig/pomcp_conjoined.png')

@@ -26,25 +26,37 @@ def extract_plot_vals(row):
 
 plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
 
-ax = sns.barplot(plot_df, x='name', y='traj_lens', color='C0')
+fig, axs = plt.subplots(1, 2, figsize=(8, 3))
+
+ax = sns.barplot(plot_df, x='name', y='traj_lens', ax=axs[0])
 ax.set_ylabel('Steps')
 ax.set_xlabel('')
-ax.set_title(f'Meandering Trail Benchmark')
 
-plt.gcf().tight_layout()
-plt.savefig('fig/meander_bench.png')
+x_labs = ax.get_xticklabels()
+x_labs[0] = 'Adaptive'
+ax.set_xticklabels(x_labs)
+ax.set_title('Benchmarks')
+# ax.set_title(f'Meandering Trail Benchmark')
 # plt.clf()
 
-# <codecell>
 ### PLOT TRAJECTORIES
 for k, row in df.iterrows():
+    if k == 2:
+        break
+
     for i, traj in enumerate(row['runs']):
         if i == 0:
-            plt.plot(traj, label=row['name'], color=f'C{k}', alpha=0.5)
+            axs[1].plot(traj, label=row['name'], color=f'C{k}', alpha=0.5)
         else:
-            plt.plot(traj, color=f'C{k}', alpha=0.5)
+            axs[1].plot(traj, color=f'C{k}', alpha=0.6)
+    
+axs[1].set_xlabel('Steps')
+axs[1].set_ylabel('Difficulty index')
+axs[1].legend(loc='lower right')
+axs[1].set_title('Trajectory')
 
-plt.legend()
+fig.tight_layout()
+plt.savefig('fig/meander_bench.png')
 
 # <codecell>
 df = pd.read_pickle('remote/plume_results.pkl')
@@ -60,23 +72,38 @@ def extract_plot_vals(row):
 
 plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
 
-ax = sns.barplot(plot_df, x='name', y='traj_lens', color='C0')
+
+fig, axs = plt.subplots(1, 2, figsize=(8, 3))
+
+ax = sns.barplot(plot_df, x='name', y='traj_lens', ax=axs[0])
 ax.set_ylabel('Iterations')
 ax.set_xlabel('')
-ax.set_title(f'Plume Benchmark')
+ax.set_title(f'Benchmarks')
 
-plt.gcf().tight_layout()
-plt.savefig('fig/plume_bench.png')
+x_labs = ax.get_xticklabels()
+x_labs[0] = 'Adaptive'
+ax.set_xticklabels(x_labs)
+
 # plt.clf()
 
-# <codecell>
 ### PLOT TRAJECTORIES
+
 for k, row in df.iterrows():
+    if k == 2:
+        break
+
     for i, traj in enumerate(row['runs']):
         if i == 0:
-            plt.plot(traj, label=row['name'], color=f'C{k}', alpha=0.5)
+            axs[1].plot(traj, label=row['name'], color=f'C{k}', alpha=0.5)
         else:
-            plt.plot(traj, color=f'C{k}', alpha=0.5)
+            axs[1].plot(traj, color=f'C{k}', alpha=0.6)
+    
+axs[1].set_xlim(xmax=60)
+axs[1].set_xlabel('Steps')
+axs[1].set_ylabel('Difficulty index')
+axs[1].legend(loc='lower right')
+axs[1].set_title('Trajectory')
 
-plt.legend()
+fig.tight_layout()
+plt.savefig('fig/plume_bench.png')
 # %%

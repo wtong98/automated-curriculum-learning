@@ -59,21 +59,28 @@ plot_traj_and_qr(traj, info['qr'], eps, N, save_path='fig/fig2_success_qr.png')
 
 # <codecell>
 ### SAME AS ABOVE, BUT CONJOINED
-fig, axs = plt.subplots(3, 1, figsize=(5, 8))
-
-N = 10
-eps = 0
-traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1])
-
-N = 10
-eps = -2
-traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2])
+fig, axs = plt.subplots(3, 2, figsize=(9, 8), sharey=False)
 
 N = 10
 eps = 2
 traj, info = run_exp_inc(eps=eps, goal_length=N)
-plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0])
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[0][0])
+plot_traj_slices(info['qr'], ax=axs[0][1], eps=eps)
+
+N = 10
+eps = 0
+traj, info = run_exp_inc(eps=eps, goal_length=N)
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[1][0])
+plot_traj_slices(info['qr'], ax=axs[1,1], eps=eps)
+
+N = 10
+eps = -2
+traj, info = run_exp_inc(eps=eps, goal_length=N)
+plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2,0])
+plot_traj_slices(info['qr'], ax=axs[2,1], eps=eps)
+
+fig.tight_layout()
 
 plt.savefig('fig/inc_fail_conjoined.png')
+
+# <codecell>

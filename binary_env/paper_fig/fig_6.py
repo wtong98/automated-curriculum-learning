@@ -14,26 +14,28 @@ from common import *
 
 # <codecell>
 ### INCREMENTAL CONJOINED
-fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+fig, axs = plt.subplots(3, 2, figsize=(9, 8))
 
 N = 10
 eps_s = [2, 0, -2]
 
 for i, eps in enumerate(eps_s):
     traj, info = run_inc_cont(eps=eps, goal_length=N)
-    plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[i], n_step=100)
+    plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[i,0], n_step=100)
+    plot_traj_slices(info['qr'], axs[i,1], eps, n_steps=100)
 
 plt.savefig('fig/inc_cont_conjoined.png')
 # %%
 ### ADAPTIVE CONJOINED
-fig, axs = plt.subplots(3, 1, figsize=(5, 8))
+fig, axs = plt.subplots(3, 2, figsize=(9, 8))
 
 N = 10
 eps_s = [2, 0, -2]
 
 for i, eps in enumerate(eps_s):
     traj, info = run_exp_cont(eps=eps, goal_length=N)
-    plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[i], n_step=100)
+    plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[i,0], n_step=100)
+    plot_traj_slices(info['qr'], axs[i,1], eps, n_steps=100)
 
 plt.savefig('fig/exp_cont_conjoined.png')
 
