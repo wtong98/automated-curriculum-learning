@@ -8,3 +8,4 @@ log/
 trained/
 sample/
 .vscode/
+.ipynb_checkpoints
