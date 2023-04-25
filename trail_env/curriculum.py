@@ -39,6 +39,9 @@ class CurriculumCallback(BaseCallback):
 
         if self.eval_env:
             self.eval_env.queue_map(self.curr_ckpt['map'])
+        
+        for cb in self.next_lesson_callbacks:
+            cb(self)
     
     def _on_step(self) -> bool:
         self.curr_iter += 1

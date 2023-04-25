@@ -80,6 +80,57 @@ def to_sched_cont():
     
     return sched
 
+def logit(x):
+    return np.log(x / (1 - x))
+
+class EstimateQValCallback:
+    def __init__(self, sched: list, trail_class=MeanderTrail, n_tests=10) -> None:
+        self.sched = sched
+        self.trail_class = trail_class
+        self.probs = []
+        self.n_tests = n_tests
+
+    def __call__(self, cb: CurriculumCallback):
+        prob_succ = [1]
+        prob = 1
+        for args in tqdm(self.sched):
+            if prob != 0:
+                prob = self._test_student(cb.teacher.student, args)
+            else:
+                print('warn: zero prob, skipping')
+
+            prob_succ.append(prob)
+
+        # prob_succ = np.array([1] + [self._test_student(cb.teacher.student, args) for args in tqdm(self.sched)])
+        prob_succ = np.array(prob_succ)
+        print('PROBS', prob_succ)
+
+        ratios = prob_succ[1:] / prob_succ[:-1]
+        print('RATIOS', ratios)
+
+        qs = logit(ratios)
+        print('QS', qs)
+
+        self.probs.append(ratios)
+
+
+    def _test_student(self, student, trail_args):
+        total_success = 0
+        env = TrailEnv(self.trail_class(**trail_args))
+
+        for _ in range(self.n_tests):
+            is_done = False
+            obs = env.reset()
+            while not is_done:
+                action, _ = student.predict(obs, deterministic=True)
+                obs, _, is_done, info = env.step(action)
+                is_success = info['is_success']
+            
+            if is_success:
+                total_success += 1
+        
+        return total_success / self.n_tests
+
 
 @dataclass
 class Case:
@@ -91,7 +142,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 5
+    n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
@@ -103,7 +154,9 @@ if __name__ == '__main__':
         (50, [(0.5, 0.6)]),
         (70, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
-        (110, [(0.5, 0.6)]),
+        (100, [(0.5, 0.6)]),
+
+        # (110, [(0.5, 0.6)]),
         # (85, [(0.5, 0.6)]),
 
         # (10, [(0.5, 0.6)]),
@@ -141,17 +194,27 @@ if __name__ == '__main__':
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = env_fn()
+
+    inc_est_q_callback = EstimateQValCallback(sched=sched)
+    adp_est_q_callback = EstimateQValCallback(sched=sched)
     
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher),
-        Case('Incremental', IncrementalTeacher),
+
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={
+            # 'next_lesson_callbacks': [adp_est_q_callback]
+        }),
+
+        Case('Incremental', IncrementalTeacher, cb_params={
+            # 'next_lesson_callbacks': [inc_est_q_callback]
+        }),
         Case('Random', RandomTeacher),
         Case('Final', FinalTaskTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
         for case in cases:
+            print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, tau=0.9, **case.teacher_params)
             model = make_model(env)
             # model = PPO.load('trained/osc_break/0/gen93')
@@ -165,6 +228,12 @@ if __name__ == '__main__':
         
     df = pd.DataFrame(cases)
     df.to_pickle('meander_results.pkl')
+
+    inc_probs = np.array(inc_est_q_callback.probs)
+    np.save('meander_inc_probs.npy', inc_probs)
+
+    adp_probs = np.array(adp_est_q_callback.probs)
+    np.save('meander_adp_probs.npy', adp_probs)
 
 # <codecell>
 '''

@@ -4,6 +4,7 @@ fig/
 *.png
 *.svg
 *.zip
+*.npy
 log/
 trained/
 sample/
