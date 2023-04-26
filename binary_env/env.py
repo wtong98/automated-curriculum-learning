@@ -892,7 +892,7 @@ class TeacherPomcpAgentClean(Agent):
     
 
     def next_action(self, prev_action=None, obs=None):
-        if obs != None and prev_action != None:
+        if type(obs) != type(None) and prev_action != None:
             print(f'Observed: {obs}')
             self.history += (prev_action, obs,)
             self.full_history += (prev_action, obs,)
@@ -928,9 +928,12 @@ class TeacherPomcpAgentClean(Agent):
     def _sample_transition(self, state, action):
         n, qr, qe, lr = state
         new_n = np.clip(n + action - 1, 1, self.goal_length)
+        trans = []
+
         for _ in range(self.T):
             fail_idx = self._sim_fail(new_n, qr + qe)
             qr = self._update_qr(new_n, qr, qe, lr, fail_idx)
+            trans.append(int(fail_idx == new_n))
         
         reward = 0
         is_done = False
@@ -938,10 +941,7 @@ class TeacherPomcpAgentClean(Agent):
             is_done = True
             reward = 10
 
-        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + qe)[:new_n]])
-        obs = self._to_bin(log_prob)
-        
-        return (new_n, qr, qe, lr), obs, reward, is_done
+        return (new_n, qr, qe, lr), tuple(trans), reward, is_done
 
     def _sim_fail(self, n, qs):
         for fail_idx, q in enumerate(qs[:n]):
@@ -964,14 +964,6 @@ class TeacherPomcpAgentClean(Agent):
     
     def _sig(self, x):
         return 1 / (1 + np.exp(-np.array(x)))
-
-    def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
-        logit = log_p - np.log(1 - np.exp(log_p) + eps)
-
-        norm = (logit - logit_min) / (logit_max - logit_min)
-        bin_p = np.clip(np.round(norm * self.bins), 0, self.bins)
-        
-        return bin_p
 
     def _sample_prior(self):
         qr = np.zeros(self.goal_length)
@@ -1080,7 +1072,7 @@ class TeacherPomcpAgentClean(Agent):
                 vals.append(next_node['v'] + explore)
 
             a = np.argmax(vals)
-            next_state, obs, reward, is_done = self._sample_transition(state, a)
+            next_state, trans, reward, is_done = self._sample_transition(state, a)
             reward_stack.append(reward)
 
             if depth > 0:   # NOTE: avoid re-adding encountered state
@@ -1096,7 +1088,7 @@ class TeacherPomcpAgentClean(Agent):
                 vict_iter = 1
                 break
 
-            history += (a, obs)
+            history += (a, trans)
             state = next_state
             depth += 1
         

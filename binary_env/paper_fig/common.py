@@ -100,7 +100,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
     agent = TeacherPomcpAgentClean(goal_length=goal_length, 
                             T=T, bins=10, p_eps=0.05, gamma=gamma, 
                             n_particles=n_iters, q_reinv_prob=0.25)
-    env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr})
+    env = CurriculumEnv(goal_length=goal_length, train_iter=999, train_round=T, p_eps=0.05, teacher_reward=10, student_reward=10, student_qe_dist=eps, student_params={'lr': lr}, return_transcript=True)
     traj = [env.N]
     all_qr = []
     prev_obs = env.reset()
@@ -116,7 +116,7 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
         qr = [env.student.q_r[i] for i in range(goal_length)]
         all_qr.append(qr)
 
-        obs = agent._to_bin(state[1])
+        obs = tuple(state[1])
         prev_a = a
         prev_obs = obs
 
@@ -124,6 +124,30 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
             break
     
     return traj, {'qr': all_qr, 'teacher': agent}
+
+
+# <codecell>
+def plot_pomcp_diagnostics(info, eps):
+    t = info['teacher']
+    for i, (qs_true, qs, std) in enumerate(
+        zip(np.array(info['qr']).T, np.array(t.qrs_means).T, np.array(t.qrs_stds).T)):
+
+        xs = np.arange(len(qs))
+        plt.fill_between(xs, qs - 2 * std, qs + 2 * std, alpha=0.2, color=f'C{i}')
+        plt.plot(qs_true[:-1], color=f'C{i}', label=f'q_{i+1}')
+
+    lr_means = np.array(t.lr_means)
+    lr_stds = np.array(t.lr_stds)
+    plt.fill_between(xs, lr_means - 2 * lr_stds, lr_means + 2 * lr_stds, alpha=0.2, color='black')
+    plt.plot(xs, len(xs) * [0.1], color='black', label='lr')
+
+    qes_means = np.array(t.qes_means)
+    qes_stds = np.array(t.qes_stds)
+    plt.fill_between(xs, qes_means - 2 * qes_stds, qes_means + 2 * qes_stds, color='red', alpha=0.2)
+    plt.plot(xs, len(xs) * [eps], color='red', label='eps')
+
+    plt.legend()
+# <codecell>
 
 
 def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
