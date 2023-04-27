@@ -6,11 +6,14 @@ author: William Tong (wtong@g.harvard.edu)
 
 from collections import defaultdict
 from itertools import chain, zip_longest
+from multiprocessing import Pool
 from pathlib import Path
+
 import numpy as np
 from scipy.stats import beta
 
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv 
 
 from env import TrailEnv
 from trail_map import MeanderTrail
@@ -36,9 +39,7 @@ class CurriculumCallback(BaseCallback):
         self.teacher.load_training_env(self.training_env)
         self.curr_ckpt = self.teacher.next_checkpoint()
         self.training_env.env_method('queue_map', self.curr_ckpt['map'])
-
-        if self.eval_env:
-            self.eval_env.queue_map(self.curr_ckpt['map'])
+        self.eval_env.env_method('queue_map', self.curr_ckpt['map'])
         
         for cb in self.next_lesson_callbacks:
             cb(self)
@@ -55,10 +56,8 @@ class CurriculumCallback(BaseCallback):
                 return False
 
             self.training_env.env_method('queue_map', self.curr_ckpt['map'])
+            self.eval_env.env_method('queue_map', self.curr_ckpt['map'])
             self.curr_iter = 0
-
-            if self.eval_env:
-                self.eval_env.queue_map(self.curr_ckpt['map'])
 
             self.curr_gen += 1
             if self.save_every > 0 and self.curr_gen % self.save_every == 0:
@@ -115,7 +114,8 @@ class Teacher:
             self.sched = sched
 
         self.n_iters_per_ckpt = n_iters_per_ckpt
-        self.n_test_episodes = 10
+        self.n_test_episodes = 5
+
         self.student = None
         self.eval_env = None
         self.fresh = True
@@ -186,20 +186,31 @@ class Teacher:
 
     def _test_student(self, env):
         total_success = 0
-
-        for _ in range(self.n_test_episodes):
-            is_done = False
-            obs = env.reset()
-            while not is_done:
-                action, _ = self.student.predict(obs, deterministic=True)
-                obs, _, is_done, info = env.step(action)
-                is_success = info['is_success']
-            
-            if is_success:
-                total_success += 1
         
-        return total_success / self.n_test_episodes
-    
+        for _ in range(self.n_test_episodes):
+            obs = env.reset()
+            is_done = np.array(self.eval_env.num_envs * [False])
+            is_success = np.zeros(self.eval_env.num_envs)
+
+            while not np.all(is_done):
+                # print('IS_DONE', is_done)
+                action, _ = self.student.predict(obs, deterministic=True)
+                # print('ACTION', action)
+                obs, _, is_done_curr, info = env.step(action)
+                # print('INFO', info)
+                is_success_curr = np.array([i['is_success'] for i in info])
+
+                is_success[~is_done] = is_success_curr[~is_done]
+                is_done[~is_done] = is_done_curr[~is_done]
+
+                # print('IS_SUC', is_success)
+
+            total_success += np.sum(is_success)
+        
+        # print('TOT_SUC', total_success)
+        return total_success / (self.n_test_episodes * len(is_done))
+
+
 
 class FinalTaskTeacher(Teacher):
     def __init__(self, tau=0.95, **teacher_kwargs):
@@ -214,6 +225,7 @@ class FinalTaskTeacher(Teacher):
         if prob > self.prob_threshold:
             raise StopIteration
 
+def env_fn(): return TrailEnv()
 
 class IncrementalTeacher(Teacher):
     def __init__(self, tau=0.95, use_avg=True, discount=0.8, decision_point=None, aggressive_checking=False, **teacher_kwargs):
@@ -225,8 +237,12 @@ class IncrementalTeacher(Teacher):
         self.aggressive_checking = aggressive_checking
         self.avgs = []
 
-        if aggressive_checking:
-            self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
+    def load_student(self, *args, **kwargs):
+        super().load_student(*args, **kwargs)
+
+        if self.aggressive_checking:
+            self.target_env = SubprocVecEnv([env_fn for _ in range(self.eval_env.num_envs)])
+            self.target_env.env_method('queue_map', self.trail_class(**self.sched(self.sched_len - 1)))
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]
@@ -323,8 +339,12 @@ class AdaptiveExpTeacher(Teacher):
         self.avgs = []
         self.aggressive_checking = aggressive_checking
 
-        if aggressive_checking:
-            self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
+    def load_student(self, *args, **kwargs):
+        super().load_student(*args, **kwargs)
+
+        if self.aggressive_checking:
+            self.target_env = SubprocVecEnv([env_fn for _ in range(self.eval_env.num_envs)])
+            self.target_env.env_method('queue_map', self.trail_class(**self.sched(self.sched_len - 1)))
 
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]

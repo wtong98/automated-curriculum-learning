@@ -426,7 +426,8 @@ class PlumeTrail(TrailMap):
         if return_rate:
             return rate
         else:
-            return np.random.poisson(rate) / self.base_rate  # TODO: or binary?
+            samp = np.random.poisson(rate) / self.base_rate  # TODO: or binary?
+            return samp.item()
 
     def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-50, 10)):
         x = np.linspace(*x_lim, 100)

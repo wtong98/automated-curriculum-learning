@@ -44,8 +44,8 @@ def make_model(env):
 
 def run_session(student, teacher, eval_env, cb_params, max_steps=3000000):
     student.learn(total_timesteps=max_steps, 
-                  eval_env=eval_env, 
-                  eval_freq=512, 
+                #   eval_env=eval_env, 
+                #   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
     return teacher.trajectory
 
@@ -89,7 +89,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 3
+    n_runs = 1
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
     # rates = [1, 0.9]
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     def env_fn(): return TrailEnv()
 
     env = SubprocVecEnv([env_fn for _ in range(8)])
-    eval_env = env_fn()
+    eval_env = SubprocVecEnv([env_fn for _ in range(4)])
     
     discount = 0.8
     n_iters_per_ckpt = 500

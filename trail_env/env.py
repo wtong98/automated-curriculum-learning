@@ -98,7 +98,7 @@ class TrailEnv(gym.Env):
         else:
             max_steps = TrailEnv.max_steps
 
-        if self.curr_step == max_steps:
+        if self.curr_step >= max_steps:
             is_done = True
 
         self.curr_step += 1
@@ -113,7 +113,7 @@ class TrailEnv(gym.Env):
         if self.next_map != None:
             self.map = self.next_map
             self.map.reset()   # NOTE: resample map parameters
-            print('SWITCHING TO MAP:', self.map)
+            # print('SWITCHING TO MAP:', self.map)
 
             self.next_map = None
             self.history = []
@@ -258,76 +258,6 @@ class TrailAgent:
                             x = np.round(x_coord).astype(int)
                             y = np.round(y_coord).astype(int)
                             odor_img[x, y] = measure
-
-        odor_img = np.flip(odor_img.T, axis=0)
-        odor_img_scale = rescale(odor_img, self.observation_scale)
-        return odor_img_scale.astype(np.uint8)
-
-
-    def make_pos_observation_old(self):
-        pos_img = np.zeros((2 * self.view_distance, 2 * self.view_distance))
-        past_pos = np.vstack(self.position_history)
-
-        orig_trans = -np.tile(self.position, (len(self.position_history), 1))
-        rot_ang = self.heading
-        rot_trans = np.array([
-            [np.cos(rot_ang), -np.sin(rot_ang)],
-            [np.sin(rot_ang), np.cos(rot_ang)]
-        ])
-
-        ego = (past_pos + orig_trans) @ rot_trans.T
-        ego_pos = ego + self.view_distance
-        ego_pos[:,1] += int(self.y_adjust * self.view_distance)  # shift upwards
-
-        # Manhattan interpolation
-        for i, point in enumerate(ego_pos[:-1]):
-            next_point = ego_pos[i + 1]
-            d = next_point - point
-            steps = 2 * np.sum(np.abs(next_point - point)).astype('int')
-            dx = (d[0] / steps) if steps != 0 else 0
-            dy = (d[1] / steps) if steps != 0 else 0
-
-            for i in range(steps):
-                x_coord = np.round(point[0] + i * dx).astype(int)
-                y_coord = np.round(point[1] + i * dy).astype(int)
-
-                if 0 <= x_coord < self.view_distance * 2 \
-                        and 0 <= y_coord < self.view_distance * 2:
-                    pos_img[x_coord, y_coord] = 255
-
-        pos_img = np.flip(pos_img.T, axis=0)
-        pos_img_scale = rescale(pos_img, self.observation_scale)
-        return pos_img_scale.astype(np.uint8)
-
-    def make_odor_observation_old(self):
-        odor_img = np.zeros((2 * self.view_distance, 2 * self.view_distance))
-        past = np.vstack(self.odor_history)
-        past_odor = past[:, 0]
-        past_pos = past[:, 1:]
-
-        orig_trans = -np.tile(self.position, (len(past_pos), 1))
-        rot_ang = self.heading
-        rot_trans = np.array([
-            [np.cos(rot_ang), -np.sin(rot_ang)],
-            [np.sin(rot_ang), np.cos(rot_ang)]
-        ])
-
-        ego = (past_pos + orig_trans) @ rot_trans.T
-        ego_pos = ego + self.view_distance
-        ego_pos[:,1] += int(self.y_adjust * self.view_distance)  # shift upwards
-
-        for odor, pos in zip(past_odor, ego_pos):
-            x_pos = int(pos[0])
-            y_pos = int(pos[1])
-            for x_ in range(x_pos - 1, x_pos + 2):
-                for y_ in range(y_pos - 1, y_pos + 2):
-                    x_coord, y_coord = x_, y_
-                    if 0 <= x_coord < self.view_distance * 2 - 1 \
-                            and 0 <= y_coord < self.view_distance * 2 - 1:
-
-                        x = np.round(x_coord).astype(int)
-                        y = np.round(y_coord).astype(int)
-                        odor_img[x, y] = odor * 255
 
         odor_img = np.flip(odor_img.T, axis=0)
         odor_img_scale = rescale(odor_img, self.observation_scale)

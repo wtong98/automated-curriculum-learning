@@ -91,11 +91,11 @@ for N in tqdm(Ns):
 df = pd.DataFrame(raw_data)
 
 # <codecell>
-df_pomcp = pd.read_pickle('pomcp_trans.pkl')
+df_pomcp = pd.read_pickle('pomcp.pkl')
 df_pomcp
 
 
-df = pd.concat((df_pomcp, df), ignore_index=True)
+# df = pd.concat((df_pomcp, df), ignore_index=True)
 # <codecell>
 fig_dir = Path('fig/us_v_matiisen_v_pomcp')
 if not fig_dir.exists():
@@ -183,3 +183,6 @@ plt.savefig('fig/pomcp_conjoined.png')
 # <codecell>
 row = df.loc[10]
 plot_pomcp_diagnostics(row['info'][2], row['run_params']['eps'])
+plt.savefig('fig/pomcp_orig_diagnostic.png')
+
+# %%
