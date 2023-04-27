@@ -142,7 +142,7 @@ class Case:
 
 
 if __name__ == '__main__':
-    n_runs = 1
+    n_runs = 3
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
@@ -155,6 +155,7 @@ if __name__ == '__main__':
         (70, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
         (100, [(0.5, 0.6)]),
+        (110, [(0.5, 0.6)]),
 
         # (110, [(0.5, 0.6)]),
         # (85, [(0.5, 0.6)]),
@@ -201,15 +202,15 @@ if __name__ == '__main__':
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
 
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'aggressive_checking': True}, cb_params={
             # 'next_lesson_callbacks': [adp_est_q_callback]
         }),
 
-        Case('Incremental', IncrementalTeacher, cb_params={
+        Case('Incremental', IncrementalTeacher, teacher_params={'aggressive_checking': True}, cb_params={
             # 'next_lesson_callbacks': [inc_est_q_callback]
         }),
         Case('Random', RandomTeacher),
-        Case('Final', FinalTaskTeacher),
+        # Case('Final', FinalTaskTeacher),
     ]
 
     for i in tqdm(range(n_runs)):

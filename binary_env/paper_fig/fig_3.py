@@ -91,7 +91,7 @@ for N in tqdm(Ns):
 df = pd.DataFrame(raw_data)
 
 # <codecell>
-df_pomcp = pd.read_pickle('pomcp.pkl')
+df_pomcp = pd.read_pickle('pomcp_trans.pkl')
 df_pomcp
 
 
@@ -172,10 +172,14 @@ plot_traj_slices(info['qr'], ax=axs[1,1], eps=eps)
 N = 10
 eps = -2
 row = df.loc[10]
-traj, info = row['runs'][0], row['info'][0]
+traj, info = row['runs'][2], row['info'][2]
 plot_traj_and_qr(traj, info['qr'], eps, N, ax=axs[2,0])
 plot_traj_slices(info['qr'], ax=axs[2,1], eps=eps)
 
 fig.tight_layout()
 
 plt.savefig('fig/pomcp_conjoined.png')
+
+# <codecell>
+row = df.loc[10]
+plot_pomcp_diagnostics(row['info'][2], row['run_params']['eps'])

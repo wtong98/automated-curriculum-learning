@@ -99,9 +99,14 @@ if __name__ == '__main__':
     # n_rates = 6
     # rates = [init_rate * rate_decay ** n for n in range(n_rates)]
 
+    # init_rate = 0.5
+    # rate_jump = 0.1
+    # n_rates = 24
+
     init_rate = 0.5
-    rate_jump = 0.1
-    n_rates = 24
+    rate_jump=0.25
+    n_rates=9
+
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)]
     rates = [1 / r for r in inv_rates]
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
@@ -120,7 +125,7 @@ if __name__ == '__main__':
 
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.2, 'aggressive_checking': True}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
         Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
         Case('Random', RandomTeacher),
         # Case('Random', RandomTeacher),
