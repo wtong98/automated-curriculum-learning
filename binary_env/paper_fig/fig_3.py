@@ -77,10 +77,10 @@ for N in tqdm(Ns):
         cases = [
             Case('Adaptive', run_adp_exp_disc, {'eps': e, 'goal_length': N}, []),
             Case('Incremental', run_exp_inc, {'eps': e, 'goal_length': N}, []),
-            # Case('Online', run_online, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta}, []),
-            # Case('Naive', run_naive, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta, 'k': k}, []),
-            # Case('Window', run_window, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta, 'k': k}, []),
-            # Case('Sampling', run_sampling, {'eps': e, 'goal_length': N, 'alpha': alpha, 'k': k}, []),
+            Case('Online', run_online, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta}, []),
+            Case('Naive', run_naive, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta, 'k': k}, []),
+            Case('Window', run_window, {'eps': e, 'goal_length': N, 'alpha': alpha, 'beta': beta, 'k': k}, []),
+            Case('Sampling', run_sampling, {'eps': e, 'goal_length': N, 'alpha': alpha, 'k': k}, []),
             Case('Random', run_random, {'eps': e, 'goal_length': N}, []),
             Case('Final', run_final_task_only, {'eps': e, 'goal_length': N}, []),
         ]
@@ -95,7 +95,7 @@ df_pomcp = pd.read_pickle('pomcp.pkl')
 df_pomcp
 
 
-# df = pd.concat((df_pomcp, df), ignore_index=True)
+df = pd.concat((df_pomcp, df), ignore_index=True)
 # <codecell>
 fig_dir = Path('fig/us_v_matiisen_v_pomcp')
 if not fig_dir.exists():
@@ -135,7 +135,7 @@ g = sns.catplot(plot_df, x='eps', y='traj_lens', hue='name', col='N', kind='bar'
 g.set_axis_labels(f'$\epsilon$', 'Steps')
 g.legend.set_title('')
 
-plt.savefig('fig/us_v_matiisen_v_pomcp/seq_benchmarks_no_matiisen_conjoined.png')
+plt.savefig('fig/us_v_matiisen_v_pomcp/seq_benchmarks_conjoined.png')
 
 
 # %%

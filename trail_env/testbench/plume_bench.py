@@ -74,6 +74,17 @@ def to_sched_dist(dists):
     sched = [dict(start_dist=d, max_steps='auto', **trail_args) for d in dists]
     return sched
 
+def to_sched_em(ems):
+    trail_args = {
+        'wind_speed': 5,
+        'length_scale': 20,
+        'range': (-np.pi, np.pi),
+        'start_dist': 20
+    }
+
+    sched = [dict(emission_rate=e , max_steps='auto', **trail_args) for e in ems]
+    return sched
+
 # def to_sched_cont():
 #     trail_args = {
 #         'width': 5,
@@ -122,8 +133,13 @@ if __name__ == '__main__':
     # print('RATES', rates)
     # sched = to_sched(rates)
 
-    dists = [10, 15, 20, 25, 30, 35]
-    sched = to_sched_dist(dists)
+    # dists = [10, 15, 20, 25, 30, 35]
+    # sched = to_sched_dist(dists)
+    # print('SCHED', sched)
+
+    rate_fac = 0.75
+    rates = [1 * rate_fac ** i for i in range(5)]
+    sched = to_sched_em(rates)
     print('SCHED', sched)
 
     def env_fn(): return TrailEnv()
@@ -136,8 +152,8 @@ if __name__ == '__main__':
 
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.2, 'aggressive_checking': True}),
-        Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.7, 'aggressive_checking': True}),
+        Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.7, 'aggressive_checking': True}),
         Case('Random', RandomTeacher),
         # Case('Random', RandomTeacher),
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),

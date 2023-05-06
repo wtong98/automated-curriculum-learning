@@ -228,7 +228,7 @@ def run_final_task_only(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1, is_con
     return traj, {}
 
 
-def run_online(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=1):
+def run_online(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.05, beta=0.34):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -258,7 +258,7 @@ def run_online(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta
     return traj, {'qs': all_qs}
 
 
-def run_naive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=1, k=5):
+def run_naive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.16, beta=3.8, k=3):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -294,7 +294,7 @@ def run_naive(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=
     return traj, {'qs': all_qs}
 
 
-def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta=1, k=5):
+def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.26, beta=4.83, k=10):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]
@@ -337,7 +337,7 @@ def run_window(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, beta
     return traj, {'qs': all_qs}
 
 
-def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, k=5):
+def run_sampling(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, alpha=0.1, k=3):
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True)
     env.reset()
     traj = [env.N]

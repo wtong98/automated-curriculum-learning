@@ -13,6 +13,7 @@ import pandas as pd
 
 from experiment import *
 
+# <codecell>
 
 n_procs = 48
 
@@ -97,3 +98,6 @@ if __name__ == '__main__':
 
 # df.to_pickle('remote/matiisen_params_clean.pkl')
 
+# <codecell>
+df = pd.read_pickle('remote/matiisen_params_clean.pkl')
+df
