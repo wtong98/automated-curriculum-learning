@@ -5,6 +5,7 @@ author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from collections import namedtuple
 from typing import Callable
@@ -140,7 +141,7 @@ class Case:
     cb_params: dict = field(default_factory=dict)
     runs: list = field(default_factory=list)
 
-
+# <codecell>
 if __name__ == '__main__':
     n_runs = 3
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
@@ -237,7 +238,7 @@ if __name__ == '__main__':
     np.save('meander_adp_probs.npy', adp_probs)
 
 # <codecell>
-'''
+# '''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):
@@ -373,7 +374,13 @@ plt.savefig('tmp.png')
 
 model_path = Path('trained/osc_break_ii/0/gen172.zip')
 
-trail_args = sched(120)
+trail_args = {
+    'width': 5,
+    'diff_rate': 0.02,
+    'radius': 70,
+    'reward_dist': -1,
+    'range': (-np.pi, np.pi)
+}
 trail_args['length'] = 500
 trail_args['breaks'] = [(0.3, 0.32), (0.5, 0.53), (0.7, 0.72)]
 

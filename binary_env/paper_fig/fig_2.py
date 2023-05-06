@@ -3,6 +3,8 @@ Final figures for the paper (Figure 2)
 """
 
 # <codecell>
+import matplotlib as mpl
+
 import sys
 sys.path.append('../')
 
@@ -95,3 +97,49 @@ fig.tight_layout()
 plt.savefig('fig/inc_fail_conjoined.png')
 
 # <codecell>
+### REINFORCEMENT AND FORGETTING WAVES
+
+env = BinaryEnv(5, reward=10)
+student = Student(lr=0.1)
+
+incs = 30
+iters = 10
+
+cmap = mpl.colormaps['plasma']
+
+for i in range(iters):
+    student.learn(env, max_iters=999, max_rounds=incs)
+    qs = np.array([student.q_r[i] for i in range(5)])
+    plt.plot(1 + np.arange(5), qs + 0.01 * i, 'o--', color=cmap(i/iters), alpha=0.6)
+
+plt.xticks(1 + np.arange(5))
+
+plt.ylabel('Q-value')
+plt.xlabel('Level')
+plt.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, incs * iters), cmap=cmap))
+plt.gcf().tight_layout()
+plt.savefig('reinforcement_wave.png')
+# %%
+student = Student(lr=0.1)
+env = BinaryEnv(5, reward=10)
+student.learn(env, max_rounds=500)
+
+# plt.plot([student.q_r[i] for i in range(5)])
+
+env = BinaryEnv(6, reward=10)
+
+incs = 15
+iters = 10
+
+for i in range(iters):
+    qs = np.array([student.q_r[i] for i in range(6)])
+    plt.plot(1 + np.arange(6), qs + 0.01 * i, 'o--', color=cmap(i/iters), alpha=0.6)
+    student.learn(env, max_rounds=incs)
+
+plt.xticks(1 + np.arange(6))
+
+plt.ylabel('Q-value')
+plt.xlabel('Level')
+plt.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, incs * iters), cmap=cmap))
+plt.gcf().tight_layout()
+plt.savefig('extinction_wave.png')

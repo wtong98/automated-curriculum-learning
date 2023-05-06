@@ -64,6 +64,16 @@ def to_sched(rates):
     sched = [dict(start_rate=r, max_steps='auto', **trail_args) for r in rates]
     return sched
 
+def to_sched_dist(dists):
+    trail_args = {
+        'wind_speed': 5,
+        'length_scale': 20,
+        'range': (-np.pi, np.pi)
+    }
+
+    sched = [dict(start_dist=d, max_steps='auto', **trail_args) for d in dists]
+    return sched
+
 # def to_sched_cont():
 #     trail_args = {
 #         'width': 5,
@@ -104,16 +114,17 @@ if __name__ == '__main__':
     # n_rates = 24
 
     init_rate = 0.5
-    rate_jump=0.25
-    n_rates=9
+    rate_jump=0.5
+    n_rates=6
 
-    inv_rates = [init_rate + i * rate_jump for i in range(n_rates)]
-    rates = [1 / r for r in inv_rates]
-    # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
-    print('RATES', rates)
-    sched = to_sched(rates)
+    # inv_rates = [init_rate + i * rate_jump for i in range(n_rates)]
+    # rates = [1 / r for r in inv_rates]
+    # print('RATES', rates)
+    # sched = to_sched(rates)
 
-    print([PlumeTrail(**s).y_min for s in sched])
+    dists = [10, 15, 20, 25, 30, 35]
+    sched = to_sched_dist(dists)
+    print('SCHED', sched)
 
     def env_fn(): return TrailEnv()
 
@@ -125,7 +136,7 @@ if __name__ == '__main__':
 
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.2, 'aggressive_checking': True}),
         Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.3, 'aggressive_checking': True}),
         Case('Random', RandomTeacher),
         # Case('Random', RandomTeacher),
@@ -135,6 +146,7 @@ if __name__ == '__main__':
 
     for i in tqdm(range(n_runs)):
         for case in cases:
+            print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             model = make_model(env)
             model.set_env(env)
@@ -309,7 +321,13 @@ fig.tight_layout()
 ### MANY LARGE PLOTS
 model_path = Path('trained/plume_rate/0/gen30.zip')
 
-trail_args = sched[-6]
+trail_args = {
+    'wind_speed': 5,
+    'length_scale': 20,
+    'range': (-np.pi, np.pi),
+    'start_rate': 0.3,
+    'max_steps': 'auto'
+}
 
 model = PPO.load(model_path, device='cpu')
 n_samps = 25
@@ -358,7 +376,7 @@ for i in tqdm(range(n_samps)):
 
         m.plot(ax=ax, x_lim=(x_min-20, x_max+20), y_lim=(y_min - 20, y_max + 20))
         ax.plot(p_hist[:,0], p_hist[:,1], linewidth=2, color='black')
-        ax.scatter(odor_hist[:,1], odor_hist[:,2], c=np.log(odor_hist[:,0]), cmap='summer', s=30)
+        ax.scatter(odor_hist[:,1], odor_hist[:,2], color='red', alpha=0.8, s=30)
 
     ratio = (y_max - y_min + 40) / (x_max - x_min + 40)
     height = 6 * ratio
@@ -374,4 +392,5 @@ for i in tqdm(range(n_samps)):
     
     plt.clf()
 
+# <codecell>
 '''

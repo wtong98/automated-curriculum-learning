@@ -144,6 +144,7 @@ class Teacher:
         if not self.fresh:
             success_prob = self._test_student(self.eval_env)
             self.trajectory.append((self.sched_idx, success_prob))
+            print('SCHED_IDX', self.sched_idx)
             self.trans = self._interleave(self.training_env.get_attr('history'))
             self.trans_avg = self._average(self.training_env.get_attr('history'))
             print('AVG', self.trans_avg)
@@ -513,8 +514,12 @@ class RandomTeacher(Teacher):
     def __init__(self, tau=0.95, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.prob_threshold = tau
-        self.target_env = TrailEnv(self.trail_class(**self.sched(self.sched_len - 1)))
         self.sched_idx = np.random.choice(self.sched_len)
+
+    def load_student(self, *args, **kwargs):
+        super().load_student(*args, **kwargs)
+        self.target_env = SubprocVecEnv([env_fn for _ in range(self.eval_env.num_envs)])
+        self.target_env.env_method('queue_map', self.trail_class(**self.sched(self.sched_len - 1)))
     
     def _update_sched_idx(self):
         _, prob = self.trajectory[-1]

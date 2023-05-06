@@ -583,95 +583,96 @@ class TeacherTree:
         return result
 
 
-class TeacherPomcpAgent(Agent):
-    def __init__(self, goal_length, T, bins=10, p_eps=0.05, lookahead_cap=None,
-                       student_reward=10, 
-                       n_particles=500, gamma=0.9, eps=1e-2, 
-                       explore_factor=1, q_reinv_scale=1.5, q_reinv_prob=0.25) -> None:
+class TeacherParticleIncremental(Agent):
+    def __init__(self, goal_length, n_particles=1000, conf=0.5, reinv_scale=0.5, tau=0.95, T=3, lr=0.1, student_reward=10) -> None:
         super().__init__()
+
         self.goal_length = goal_length
-        self.T = T
-        self.bins = bins
-        self.p_eps = p_eps
-        self.lookahead_cap = lookahead_cap
-        self.student_reward = student_reward
-        self.q_reinv_scale = q_reinv_scale
-        self.q_reinv_prob = q_reinv_prob
-
         self.n_particles = n_particles
-        self.gamma = gamma
-        self.eps = eps
-        self.explore_factor = explore_factor
+        self.T = T
+        self.R = student_reward
+        self.lr = lr
+        self.N = 1
 
-        self.actions = [0, 1, 2]
-        self.history = ()
-        self.tree = {}
+        self.reinv_scale = reinv_scale
+        self.conf = conf
+        self.tau = tau
 
-        self.curr_n = 1
-        self.qrs_means = []
-        self.qrs_stds = []
-        self.qes_means = []
-        self.qes_stds = []
-        self.lr_means = []
-        self.lr_stds = []
-        self.num_particles = []
-        self.replicas = []
+        self.particles = []
+        self.all_particles = []
+
+        self.avgs = []
+        self.bounds = []
     
+    def next_action(self, state):
+        self.N, trans = state
+
+        if len(trans) == 0:
+            return 1
+
+        self._condition(trans)
+        if self._do_jump():
+            return 2
+        
+        return 1
     
-    def reset(self):
-        self.history = ()
-        self.tree = {}
+    def _condition(self, trans):
+        trans = tuple(trans)
 
-        self.qrs_means = []
-        self.qrs_stds = []
-        self.num_particles = []
-        self.curr_n = 1
+        if len(self.particles) == 0:
+            self.particles = [self._sample_prior() for _ in range(self.n_particles)]
+            self.all_particles.append(self.particles[:])
+
+        outcomes = [self._sample_transition(p) for p in self.particles]
+        self.particles = np.array([p for p, t in outcomes if t == trans], dtype=object)
+
+        # print('N_PARTS', len(self.particles))
+
+        # resample
+        log_probs = np.array([self._log_prob(p, trans) for p in self.particles])
+        raw_probs = np.exp(log_probs - np.max(log_probs))
+        probs = raw_probs / np.sum(raw_probs)
+
+        samp_idxs = np.random.choice(len(self.particles), replace=True, p=probs, size=self.n_particles)
+        self.particles = self.particles[samp_idxs]
+        self.particles = self._reinvigorate(self.particles)
+        self.all_particles.append(np.copy(self.particles))
+
+    def _do_jump(self):
+        sn = np.array([self._get_success(p) for p in self.particles])
+        conf_jump = np.mean(sn > self.tau)
+
+        self.avgs.append(np.mean(sn))
+        self.bounds.append(np.quantile(sn, (0.025, 0.25, 0.75, 0.975)))
+
+        return conf_jump > self.conf
+
+    def _get_success(self, params):
+        qr, qe = params
+        probs = self._sig(qr + qe)
+        return np.prod(probs[:self.N])
     
+    def _log_prob(self, params, trans):
+        qr, qe = params
+        prob = self._sig(qr + qe)
+        prob = np.prod(prob[:self.N])
 
-    def next_action(self, prev_action=None, obs=None):
-        if obs != None and prev_action != None:
-            print(f'Observed: {obs}')
-            self.history += (prev_action, obs,)
+        n1 = np.sum(trans)
+        n0 = len(trans) - n1
 
-            qs = [(state[1], state[2], state[3]) for state in self.tree[self.history]['b']]
-            qrs, qes, lrs = zip(*qs)
-            qrs_mean = np.mean(qrs, axis=0)
-            qrs_std = np.std(qrs, axis=0)
-            qes_mean = np.mean(qes)
-            qes_std = np.std(qes)
-            lr_mean = np.mean(lrs)
-            lr_std = np.std(lrs)
+        return n0 * np.log(1 - prob) + n1 * np.log(prob)
 
-            self.num_particles.append(len(qrs))
-            self.qrs_means.append(qrs_mean)
-            self.qrs_stds.append(qrs_std)
-            self.qes_means.append(qes_mean)
-            self.qes_stds.append(qes_std)
-            self.lr_means.append(lr_mean)
-            self.lr_stds.append(lr_std)
-            print('N_particles:', len(qrs))
+    def _sample_transition(self, params):
+        qr, qe = params
+        new_n = self.N
+        trans = []
 
-        a = self._search()
-        self.curr_n = np.clip(self.curr_n + a - 1, 1, self.goal_length)  # NOTE: assuming agent follows the proposed action
-        return a
-    
-    def _sample_transition(self, state, action):
-        n, qr, qe, lr = state
-        new_n = np.clip(n + action - 1, 1, self.goal_length)
         for _ in range(self.T):
             fail_idx = self._sim_fail(new_n, qr + qe)
-            qr = self._update_qr(new_n, qr, qe, lr, fail_idx)
+            qr = self._update_qr(new_n, qr, qe, fail_idx)
+            trans.append(int(fail_idx == new_n))
         
-        reward = 0
-        is_done = False
-        if -np.sum(np.log(self._sig(qr + qe))) < self.p_eps and new_n == self.goal_length:
-            is_done = True
-            reward = 10
-
-        log_prob = np.sum([-np.log(1 + np.exp(-q)) for q in (qr + qe)[:new_n]])
-        obs = self._to_bin(log_prob)
-        
-        return (new_n, qr, qe, lr), obs, reward, is_done
+        return (qr, qe), tuple(trans)
 
     def _sim_fail(self, n, qs):
         for fail_idx, q in enumerate(qs[:n]):
@@ -680,179 +681,36 @@ class TeacherPomcpAgent(Agent):
         
         return n
 
-    def _update_qr(self, n, qr, qe, lr, fail_idx):
+    def _update_qr(self, n, qr, qe, fail_idx):
         qr = np.copy(qr)
         if fail_idx == n:
-            payoff = self.student_reward
+            payoff = self.R
         else:
             payoff = self._sig(qr[fail_idx] + qe) * qr[fail_idx]
         
         probs = self._sig(qr[1:fail_idx] + qe)
         rpe = np.append(probs * qr[1:fail_idx], payoff) - qr[:fail_idx]
-        qr[:fail_idx] += lr * rpe
+        qr[:fail_idx] += self.lr * rpe
         return qr
     
     def _sig(self, x):
         return 1 / (1 + np.exp(-np.array(x)))
 
-    def _to_bin(self, log_p, logit_min=-2, logit_max=2, eps=1e-8):
-        logit = log_p - np.log(1 - np.exp(log_p) + eps)
-
-        norm = (logit - logit_min) / (logit_max - logit_min)
-        bin_p = np.clip(np.round(norm * self.bins), 0, self.bins)
-        
-        return bin_p
-
     def _sample_prior(self):
         qr = np.zeros(self.goal_length)
         qe = np.random.uniform(-5, 5)
-        lr = np.random.uniform(0, 1)
-        return (1, qr, qe, lr) 
-
-    def _sample_rollout_policy(self, history):
-        return np.random.choice(self.actions)
+        return (qr, qe) 
     
-    def _sample_inc_policy(self, state):
-        n, qr, qe = state[:3]
-        total_log_prob = 0
-        for i, q in enumerate(qr + qe):
-            total_log_prob += np.log(self._sig(q))
-            if total_log_prob < -self.p_eps:
-                break
-        
-        if i + 1 < n:
-            return 0
-        elif i + 1 > n:
-            return 2
-        else:
-            return 1
-
-    
-    def _init_node(self):
-        return {'v': 0, 'n': 0, 'b': []}
-    
-    def _search(self):
-        if len(self.history) == 0:
-            for _ in range(self.n_particles):
-                state = self._sample_prior()
-                self._simulate(state, self.history, 0)
-        else:
-            params = [(state[2], state[3]) for state in self.tree[self.history]['b']]
-            eps, lr = zip(*params)
-            eps_bounds = (np.min(eps), np.max(eps))
-            lr_bounds = (np.min(lr), np.max(lr))
-
-            print('ITER WITH HIST', self.history)
-            iters = []
-            vict_iters = []
-            for _ in range(self.n_particles):
-                state_idx = np.random.choice(len(self.tree[self.history]['b']))
-                state = self.tree[self.history]['b'][state_idx]
-
-                if np.random.random() < self.q_reinv_prob:
-                    new_eps = np.random.uniform(*eps_bounds)
-                    new_lr = np.random.uniform(*lr_bounds)
-                    state = (state[0], state[1], new_eps, new_lr)
-
-                tot_iter, vict_iter = self._simulate(state, self.history, 0)
-                iters.append(tot_iter)
-                vict_iters.append(vict_iter)
-
-            print('MEAN ITERS', np.mean(iters))
-            print('N_ITERS', len(iters))
-            # print('PROP VICT', np.mean(vict_iters))
-        
-        vals = [self.tree[self.history + (a,)]['v'] for a in self.actions]
-        print('VALS', vals)
-        return np.argmax(vals)
-    
-    def _simulate(self, state, history, depth):
-        reward_stack = []
-        node_stack = []
-        n_visited_stack = []
-
-        tot_iter = 0
-        vict_iter = 0
-
-        while self.gamma ** depth > self.eps:
-            tot_iter += 1
-            if history not in self.tree:
-                self.tree[history] = self._init_node()
-                for a in self.actions:
-                    proposal = history + (a,)
-                    self.tree[proposal] = self._init_node()
-                pred_reward = self._rollout(state, history, depth)
-                reward_stack.append(pred_reward)
-                break
-
-            vals = []
-            for a in self.actions:
-                curr_node = self.tree[history]
-                next_node = self.tree[history + (a,)]
-                if curr_node['n'] > 0 and next_node['n'] > 0:
-                    explore = self.explore_factor * np.sqrt(np.log(curr_node['n']) / next_node['n'])
-                else:
-                    explore = 999  # arbitrarily high
-
-                vals.append(next_node['v'] + explore)
-
-            a = np.argmax(vals)
-            next_state, obs, reward, is_done = self._sample_transition(state, a)
-            reward_stack.append(reward)
-
-            if depth > 0:   # NOTE: avoid re-adding encountered state
-                self.tree[history]['b'].append(state)
-            self.tree[history]['n'] += 1
-
-            next_node = self.tree[history + (a,)]
-            next_node['n'] += 1
-            node_stack.append(next_node)
-            n_visited_stack.append(next_node['n'])
-
-            if is_done:
-                vict_iter = 1
-                break
-
-            history += (a, obs)
-            state = next_state
-            depth += 1
-        
-        for i, (node, n_visited) in enumerate(zip(node_stack, n_visited_stack)):
-            total_reward = np.sum([r * self.gamma ** iters for iters, r in enumerate(reward_stack[i:])])
-            node['v'] += (total_reward - node['v']) / n_visited
-        
-        return tot_iter, vict_iter
-
-
-    def _rollout(self, state, history, depth):
-        g = 1
-        total_reward = 0
-
-        while self.gamma ** depth > self.eps:
-            # a = self._sample_rollout_policy(history)
-            a = self._sample_inc_policy(state)
-            state, obs, reward, is_done = self._sample_transition(state, a)
-
-            history += (a, obs)
-            total_reward += g * reward
-            g *= self.gamma
-            depth += 1
-
-            if is_done:
-                break
-        
-        return total_reward
-
-
-    def learn(self, *args, **kwargs):
-        raise NotImplementedError('TeacherPomcpAgent does not implement method `learn`')
+    def _reinvigorate(self, particles):
+        new_p = [(qr, eps + self.reinv_scale * np.random.randn()) for qr, eps in particles]
+        return new_p
 
 
 class TeacherPomcpAgentClean(Agent):
     def __init__(self, goal_length, T, bins=10, p_eps=0.05,
                        student_reward=10, 
                        n_particles=500, gamma=0.9, eps=1e-2, 
-                       explore_factor=1, q_reinv_prob=0.25) -> None:
+                       explore_factor=1, q_reinv_prob=0.25, q_reinv_scale=0.5) -> None:
         super().__init__()
         self.goal_length = goal_length
         self.T = T
@@ -860,6 +718,7 @@ class TeacherPomcpAgentClean(Agent):
         self.p_eps = p_eps
         self.student_reward = student_reward
         self.q_reinv_prob = q_reinv_prob
+        self.q_reinv_scale = q_reinv_scale
 
         self.n_particles = n_particles
         self.gamma = gamma
@@ -1001,10 +860,8 @@ class TeacherPomcpAgentClean(Agent):
         else:
             curr_states = self.tree[self.history]['b']
 
-            params = [(state[2], state[3]) for state in curr_states]
-            eps, lr = zip(*params)
-            eps_bounds = (np.min(eps), np.max(eps))
-            lr_bounds = (np.min(lr), np.max(lr))
+            # lr = [state[3] for state in curr_states]
+            # lr_bounds = (np.min(lr), np.max(lr))
 
             print('ITER WITH HIST', self.full_history)
             iters = []
@@ -1013,10 +870,16 @@ class TeacherPomcpAgentClean(Agent):
                 state_idx = np.random.choice(len(curr_states))
                 state = curr_states[state_idx]
 
-                if np.random.random() < self.q_reinv_prob:
-                    new_eps = np.random.uniform(*eps_bounds)
-                    new_lr = np.random.uniform(*lr_bounds)
-                    state = (state[0], state[1], new_eps, new_lr)
+                # if np.random.random() < self.q_reinv_prob:
+                #     new_eps = state[2] + self.q_reinv_scale * self.random.randn()
+                #     new_lr = np.random.uniform(*lr_bounds)
+                #     state = (state[0], state[1], new_eps, new_lr)
+
+                state = (state[0], # N
+                         state[1], # q_r
+                         state[2] + self.q_reinv_scale * np.random.randn(), # eps
+                         state[3]  # lr
+                )
 
                 tot_iter, vict_iter = self._simulate(state, self.history, 0)
                 iters.append(tot_iter)

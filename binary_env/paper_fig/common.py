@@ -6,6 +6,7 @@ Common utils useful for making these plots
 from dataclasses import dataclass, field
 from typing import Callable
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import linregress
@@ -65,8 +66,10 @@ def plot_traj_and_qr(traj, qr, eps, N, n_step=1, ax=None, save_path=None):
 def plot_traj_slices(qr, ax, eps, n_steps=1):
     qr = np.array(qr) + eps
 
+    cmap = mpl.colormaps['plasma']
+
     for i in [0, 2, 4, 7, 9]:
-        ax.plot(qr[:,i*n_steps + n_steps - 1], label=f'N = {i+1}', alpha=i/15 + 0.35, color='C0')
+        ax.plot(qr[:,i*n_steps + n_steps - 1], label=f'N = {i+1}', color=cmap(i/13), alpha=0.6)
 
     ax.set_xlabel('Step')
     ax.set_ylabel(r'Q value')

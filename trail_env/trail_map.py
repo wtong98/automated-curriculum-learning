@@ -261,18 +261,18 @@ class MeanderTrail(TrailMap):
         ckpt_x, ckpt_y = self.checkpoints.T if len(self.checkpoints) > 0 else (0, 0)
 
         if ax:
-            ax.plot(self.x_coords, self.y_coords, linewidth=3, color='red', alpha=0.5)
-            ax.contourf(x, y, odors)
+            ax.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
+            ax.contourf(x, y, odors, cmap='Greens', alpha=0.3)
             ax.scatter(ckpt_x, ckpt_y, color='red')
 
             circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=3, color='blue', zorder=100, alpha=0.7)
             return ax.add_patch(circle)
         else:
             plt.gcf().set_size_inches(8, 8)
-            plt.plot(self.x_coords, self.y_coords, linewidth=3, color='red', alpha=0.5)
-            plt.contourf(x, y, odors)
+            plt.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
+            mbp = plt.contourf(x, y, odors, cmap='Greens', alpha=0.3)
             plt.scatter(ckpt_x, ckpt_y, color='red')
-            plt.colorbar()
+            plt.colorbar(mbp)
 
             circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=3, color='blue', zorder=100, alpha=0.7)
             plt.gca().add_patch(circle)
@@ -332,10 +332,10 @@ class BrokenMeanderTrail(MeanderTrail):
         super().reset()
 
 
-# NOTE: wind speed fixed along direction of negative y axis
 class PlumeTrail(TrailMap):
     def __init__(self, start=None,
                  start_rate=None,
+                 start_dist=None,
                  heading=None,
                  range=(-np.pi/4, np.pi/4),
                  diffusivity=1,
@@ -363,15 +363,19 @@ class PlumeTrail(TrailMap):
             self.range = (heading, heading)
         self.heading = np.random.uniform(*self.range)
 
+        self.start_rate = start_rate
+        self.start_dist = start_dist
+
         if start_rate:
             self.y_max, self.y_min = np.real(self._compute_y(start_rate))
             start = self._sample_point(start_rate)
-            self.start_rate = start_rate
+        elif start_dist:
+            start = start_dist * np.array((-np.sin(self.heading), -np.cos(self.heading)))
         super().__init__(start, end=np.array((0,0)))
 
         if max_steps == 'auto':
-            assert start_rate != None
-            self.max_steps = np.round(3 * - self.y_min)
+            dist = np.linalg.norm(self.start - self.end)
+            self.max_steps = np.round(3 * dist)
         else:
             self.max_steps = max_steps
     
@@ -440,18 +444,20 @@ class PlumeTrail(TrailMap):
         lvls = np.arange(0, 1, 0.05)
         if ax != None:
             ax.plot(*self.start, marker='o', markersize=10, color='blue')
-            ax.contourf(x, y, odors_samples, levels=lvls)
-            ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
+            ax.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
+            # ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
         else:
             plt.plot(*self.start, marker='o', markersize=10, color='blue')
-            plt.contourf(x, y, odors_samples, levels=lvls)
+            plt.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
             plt.colorbar()
-            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
+            # plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
     def reset(self):
         self.heading = np.random.uniform(*self.range)
         if self.start_rate != None:
             self.start = self._sample_point(self.start_rate)
+        elif self.start_dist != None:
+            self.start = self.start_dist * np.array((-np.sin(self.heading), -np.cos(self.heading)))
     
     def __str__(self) -> str:
         return f'PlumeTrail(start={self.start}  rate={self.start_rate})'
@@ -461,7 +467,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(range=(-np.pi/4, np.pi/4), heading=None, wind_speed=50, start_rate=0.8, length_scale=20, distance_factor=5, max_steps='auto')
+    trail = PlumeTrail(range=(-np.pi/4, np.pi/4), heading=None, wind_speed=5, start_dist=30, emission_rate=1, length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
