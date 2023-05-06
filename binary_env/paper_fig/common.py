@@ -151,8 +151,6 @@ def plot_pomcp_diagnostics(info, eps):
 
     plt.legend()
 # <codecell>
-
-
 def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     for i in range(max_retries):
         try:
