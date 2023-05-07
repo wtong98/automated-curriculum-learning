@@ -74,15 +74,14 @@ def to_sched_dist(dists):
     sched = [dict(start_dist=d, max_steps='auto', **trail_args) for d in dists]
     return sched
 
-def to_sched_em(ems):
+def to_sched_em(ems, dists):
     trail_args = {
         'wind_speed': 5,
         'length_scale': 20,
         'range': (-np.pi, np.pi),
-        'start_dist': 20
     }
 
-    sched = [dict(emission_rate=e , max_steps='auto', **trail_args) for e in ems]
+    sched = [dict(emission_rate=e, start_dist=d, max_steps='auto', **trail_args) for e, d in zip(ems, dists)]
     return sched
 
 # def to_sched_cont():
@@ -104,6 +103,7 @@ def to_sched_em(ems):
 class Case:
     name: str = ''
     teacher: Callable = None
+    teacher_handle: Teacher = None
     teacher_params: dict = field(default_factory=dict)
     cb_params: dict = field(default_factory=dict)
     runs: list = field(default_factory=list)
@@ -137,9 +137,13 @@ if __name__ == '__main__':
     # sched = to_sched_dist(dists)
     # print('SCHED', sched)
 
-    rate_fac = 0.75
-    rates = [1 * rate_fac ** i for i in range(5)]
-    sched = to_sched_em(rates)
+    # start_rate = 2
+    # rate_fac = 0.5
+    # rates = [start_rate * rate_fac ** i for i in range(5)]
+    rates = [2,  2,  2,  1,  0.5, 0.25, 0.125]
+    dists = [10, 20, 30, 35, 40,  50  ,   60]
+
+    sched = to_sched_em(rates, dists)
     print('SCHED', sched)
 
     def env_fn(): return TrailEnv()
@@ -152,8 +156,8 @@ if __name__ == '__main__':
 
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, {'discount': discount, 'decision_point': 0.7, 'aggressive_checking': True}),
-        Case('Incremental', IncrementalTeacher, {'discount': discount, 'decision_point': 0.7, 'aggressive_checking': True}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.6, 'aggressive_checking': False}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.6, 'aggressive_checking': False}),
         Case('Random', RandomTeacher),
         # Case('Random', RandomTeacher),
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -164,6 +168,7 @@ if __name__ == '__main__':
         for case in cases:
             print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
+            case.teacher_handle = teacher
             model = make_model(env)
             model.set_env(env)
             # TODO: split each run into its own directory

@@ -183,6 +183,6 @@ plt.savefig('fig/pomcp_conjoined.png')
 # <codecell>
 row = df.loc[10]
 plot_pomcp_diagnostics(row['info'][2], row['run_params']['eps'])
-plt.savefig('fig/pomcp_orig_diagnostic.png')
+plt.savefig('fig/pomcp_trans_diagnostic.png')
 
 # %%

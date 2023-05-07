@@ -430,7 +430,7 @@ class PlumeTrail(TrailMap):
         if return_rate:
             return rate
         else:
-            samp = np.random.poisson(rate) / self.base_rate  # TODO: or binary?
+            samp = np.random.poisson(rate) / 50  # TODO: or binary?
             return samp.item()
 
     def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-50, 10)):
@@ -448,7 +448,7 @@ class PlumeTrail(TrailMap):
             # ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
         else:
             plt.plot(*self.start, marker='o', markersize=10, color='blue')
-            plt.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
+            plt.contourf(x, y, odors_samples, levels=lvls, cmap='viridis', alpha=1)
             plt.colorbar()
             # plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
@@ -467,7 +467,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(range=(-np.pi/4, np.pi/4), heading=None, wind_speed=5, start_dist=30, emission_rate=1, length_scale=20, max_steps='auto')
+    trail = PlumeTrail(range=(-np.pi/200, np.pi/200), heading=None, wind_speed=5, start_dist=30, emission_rate=2, length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
@@ -478,4 +478,11 @@ if __name__ == '__main__':
 
     print(trail.y_min)
     # plt.savefig('example_trail.svg')
+
 # %%
+    print(trail.sample(0, -0.1, return_rate=True))
+
+    for _ in range(10):
+        print(trail.sample(0, -15) * 256)
+
+    trail.base_rate

@@ -570,7 +570,7 @@ class TeacherTree:
 
         self.splits = splits.reshape(n_feats, n_splits - 1)
         if decisions == None:
-            decisions = np.arange(n_feats * n_splits)
+            decisions = np.arange(n_splits**n_feats)
 
         self.decisions = decisions.reshape((n_splits,) * n_feats)
     
