@@ -186,9 +186,7 @@ def enumerate_maps(n_dec=9, n_idx=3):
         yield samp
 
 split3_init_args = [0, 1, 1, 0, 1, 1, 0, 2, 2]
-# run_disc_split3([0.4, 0.8, -0.1, 0.1], [0, 1, 1, 0, 1, 1, 0, 2, 2])
-
-# len(list(enumerate_maps()))
+run_disc_split3([0.4, 0.8, -0.1, 0.1], [0, 1, 1, 0, 1, 1, 0, 2, 2])
 
 # <codecell>
 # def cb(xk, **kwargs):
@@ -205,7 +203,7 @@ dec_map = [0, 1, 0, 2]
 # TODO: implement coordinated, greedy ascent across varying N's and eps's
 for _ in range(3):
     result = differential_evolution(run_disc_split3, args=(split3_init_args,), bounds=[(0, 1), (0, 1), (-1, 1), (-1, 1)], workers=-1, updating='deferred', maxiter=5, callback=cb)
-    args = [(result.x, m) for m in enumerate_maps(n_dec=4, n_idx=3)]
+    args = [(result.x, m) for m in enumerate_maps(n_dec=9, n_idx=3)]
 
     with Pool(16) as p:
         map_stats = p.starmap(run_disc_split3, args)
