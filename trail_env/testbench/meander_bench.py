@@ -143,7 +143,7 @@ class Case:
 
 # <codecell>
 if __name__ == '__main__':
-    n_runs = 3
+    n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
         # (5, []),
@@ -155,8 +155,8 @@ if __name__ == '__main__':
         (50, [(0.5, 0.6)]),
         (70, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
-        (100, [(0.5, 0.6)]),
-        (110, [(0.5, 0.6)]),
+        (100, [(0.5, 0.63)]),
+        (100, [(0.5, 0.66)]),
 
         # (110, [(0.5, 0.6)]),
         # (85, [(0.5, 0.6)]),
@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
-    eval_env = env_fn()
+    eval_env = SubprocVecEnv([env_fn for _ in range(4)])
 
     inc_est_q_callback = EstimateQValCallback(sched=sched)
     adp_est_q_callback = EstimateQValCallback(sched=sched)
@@ -203,11 +203,11 @@ if __name__ == '__main__':
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
 
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'aggressive_checking': True}, cb_params={
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.7}, cb_params={
             # 'next_lesson_callbacks': [adp_est_q_callback]
         }),
 
-        Case('Incremental', IncrementalTeacher, teacher_params={'aggressive_checking': True}, cb_params={
+        Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7}, cb_params={
             # 'next_lesson_callbacks': [inc_est_q_callback]
         }),
         Case('Random', RandomTeacher),
@@ -224,21 +224,21 @@ if __name__ == '__main__':
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         
     df = pd.DataFrame(cases)
     df.to_pickle('meander_results.pkl')
 
-    inc_probs = np.array(inc_est_q_callback.probs)
-    np.save('meander_inc_probs.npy', inc_probs)
+    # inc_probs = np.array(inc_est_q_callback.probs)
+    # np.save('meander_inc_probs.npy', inc_probs)
 
-    adp_probs = np.array(adp_est_q_callback.probs)
-    np.save('meander_adp_probs.npy', adp_probs)
+    # adp_probs = np.array(adp_est_q_callback.probs)
+    # np.save('meander_adp_probs.npy', adp_probs)
 
 # <codecell>
-# '''
+'''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):

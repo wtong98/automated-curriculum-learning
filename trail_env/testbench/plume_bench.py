@@ -140,8 +140,8 @@ if __name__ == '__main__':
     # start_rate = 2
     # rate_fac = 0.5
     # rates = [start_rate * rate_fac ** i for i in range(5)]
-    rates = [2,  2,  2,  1,  0.5, 0.25, 0.125]
-    dists = [10, 20, 30, 35, 40,  50  ,   60]
+    rates = [2,  2,  2,  1.5,  1.125, 0.84, 0.63, 0.47]
+    dists = [10, 20, 30, 30,   30,    30  , 30,   30]
 
     sched = to_sched_em(rates, dists)
     print('SCHED', sched)
@@ -152,13 +152,14 @@ if __name__ == '__main__':
     eval_env = SubprocVecEnv([env_fn for _ in range(4)])
     
     discount = 0.8
-    n_iters_per_ckpt = 500
+    n_iters_per_ckpt = 1000
 
+    save_every = 5
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.6, 'aggressive_checking': False}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.6, 'aggressive_checking': False}),
-        Case('Random', RandomTeacher),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.5, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.5, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
         # Case('Random', RandomTeacher),
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={'save_every': 1, 'save_path': 'trained/adp_exp'}),

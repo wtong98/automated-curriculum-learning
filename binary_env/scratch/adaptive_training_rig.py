@@ -46,7 +46,7 @@ from env import *
 #         return result
 
 
-# tree = TeacherTree(splits=np.array([0.1, 0.2, 0.3, 0.4]), decisions=np.array(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']), n_feats=2, n_splits=3)
+# tree = TeacherTree(splits=np.array([0.4, 0.8, -0.1, 0.1]), decisions=np.array(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']), n_feats=2, n_splits=3)
 # tree.decide([0.3, 0.35])
 
 

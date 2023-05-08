@@ -565,12 +565,12 @@ class TeacherTree:
     def __init__(self, splits, decisions=None, n_feats=2, n_splits=2) -> None:
         if type(splits) != np.ndarray:
             splits = np.array(splits)
-        if decisions != None and type(decisions) != np.ndarray:
+        if type(decisions) == type(None):
+            decisions = np.arange(n_splits**n_feats)
+        elif type(decisions) != np.ndarray:
             decisions = np.array(decisions)
 
         self.splits = splits.reshape(n_feats, n_splits - 1)
-        if decisions == None:
-            decisions = np.arange(n_splits**n_feats)
 
         self.decisions = decisions.reshape((n_splits,) * n_feats)
     
