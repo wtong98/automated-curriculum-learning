@@ -45,8 +45,8 @@ def make_model(env):
 
 def run_session(student, teacher, eval_env, cb_params, max_steps=3000000):
     student.learn(total_timesteps=max_steps, 
-                  eval_env=eval_env, 
-                  eval_freq=512, 
+                #   eval_env=eval_env, 
+                #   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
     return teacher.trajectory
 

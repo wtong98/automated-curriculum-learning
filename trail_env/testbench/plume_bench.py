@@ -58,7 +58,8 @@ def to_sched(rates):
     trail_args = {
         'wind_speed': 5,
         'length_scale': 20,
-        'range': (-np.pi, np.pi)
+        # 'range': (-np.pi, np.pi)
+        'heading': 0
     }
 
     sched = [dict(start_rate=r, max_steps='auto', **trail_args) for r in rates]
@@ -125,13 +126,19 @@ if __name__ == '__main__':
     # n_rates = 24
 
     init_rate = 0.5
-    rate_jump=0.5
-    n_rates=6
+    rate_jump=1
+    n_rates=3
 
-    # inv_rates = [init_rate + i * rate_jump for i in range(n_rates)]
-    # rates = [1 / r for r in inv_rates]
-    # print('RATES', rates)
-    # sched = to_sched(rates)
+    sec_rate = init_rate + n_rates * rate_jump
+    sec_rate_jump=0.5
+    n_rates2=3
+
+    inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]
+    rates = [1 / r for r in inv_rates]
+    print('RATES', rates)
+    sched = to_sched(rates)
+    dists = [PlumeTrail(**args).y_min for args in sched]
+    print('DISTS', dists)
 
     # dists = [10, 15, 20, 25, 30, 35]
     # sched = to_sched_dist(dists)
@@ -140,10 +147,12 @@ if __name__ == '__main__':
     # start_rate = 2
     # rate_fac = 0.5
     # rates = [start_rate * rate_fac ** i for i in range(5)]
-    rates = [2,  2,  2,  1.5,  1.125, 0.84, 0.63, 0.47]
-    dists = [10, 20, 30, 30,   30,    30  , 30,   30]
+    # rates = [2,  2,  2,  1.5,  1.125, 0.84, 0.63, 0.47]
+    # dists = [10, 20, 30, 30,   30,    30  , 30,   30]
 
-    sched = to_sched_em(rates, dists)
+    # sched = to_sched_em(rates, dists)
+
+
     print('SCHED', sched)
 
     def env_fn(): return TrailEnv()
@@ -151,14 +160,14 @@ if __name__ == '__main__':
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = SubprocVecEnv([env_fn for _ in range(4)])
     
-    discount = 0.8
-    n_iters_per_ckpt = 1000
+    discount = 0.975
+    n_iters_per_ckpt = 3 * 1024
 
     save_every = 5
     cases = [
         # Case('Final', FinalTaskTeacher),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.5, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.5, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.375, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.4, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
         # Case('Random', RandomTeacher),
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -176,7 +185,7 @@ if __name__ == '__main__':
             # if 'save_path' in case.cb_params:
             #     case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000)
             traj = [t[0] for t in traj]
             case.runs.append(traj)
 
@@ -341,20 +350,24 @@ fig.tight_layout()
 
 # <codecell>
 ### MANY LARGE PLOTS
-model_path = Path('trained/plume_rate/0/gen30.zip')
+# model_path = Path('trained/plume_rate/0/gen30.zip')
+model_path = Path('trained/inc_tmp/gen65.zip')
 
 trail_args = {
     'wind_speed': 5,
     'length_scale': 20,
-    'range': (-np.pi, np.pi),
-    'start_rate': 0.3,
-    'max_steps': 'auto'
+    # 'range': (-np.pi, np.pi),
+    'heading': 0,
+    'start_rate': 0.25,
+    # 'start_dist': 30,
+    'max_steps': 'auto',
+    # 'emission_rate': 0.47
 }
 
 model = PPO.load(model_path, device='cpu')
 n_samps = 25
 
-path = Path(f'plume_examples/')
+path = Path(f'plume_examples_inc/')
 if not path.exists():
     path.mkdir()
 
@@ -366,7 +379,8 @@ for i in tqdm(range(n_samps)):
 
     # print('preparing to generate headings')
     trail_map = PlumeTrail(**trail_args)
-    trail_map.max_steps = 1000
+    # trail_map.max_steps = 1000
+    print('RATE', trail_map.start_rate)
 
     env = TrailEnv(trail_map, discrete=True, treadmill=True)
     

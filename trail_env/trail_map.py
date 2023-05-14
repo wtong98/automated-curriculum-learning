@@ -162,7 +162,7 @@ class TrainingTrailSet(TrailMap):  # TODO: test
         self.curr_trail = self._get_rand_trail()
 
 
-# TODO: scale length with max_steps
+# TODO: scale length with max_steps <-- IMPORTANT
 class MeanderTrail(TrailMap):
     def __init__(self, length=50, 
                        width=3, 
@@ -444,13 +444,14 @@ class PlumeTrail(TrailMap):
         lvls = np.arange(0, 1, 0.05)
         if ax != None:
             ax.plot(*self.start, marker='o', markersize=10, color='blue')
-            ax.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
-            # ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
+            # ax.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
+            ax.contourf(x, y, odors_contours, cmap='viridis', alpha=1)
+            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5, levels=lvls)
         else:
             plt.plot(*self.start, marker='o', markersize=10, color='blue')
             plt.contourf(x, y, odors_samples, levels=lvls, cmap='viridis', alpha=1)
             plt.colorbar()
-            # plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
+            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
 
     def reset(self):
         self.heading = np.random.uniform(*self.range)
@@ -467,7 +468,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(range=(-np.pi/200, np.pi/200), heading=None, wind_speed=5, start_dist=30, emission_rate=2, length_scale=20, max_steps='auto')
+    trail = PlumeTrail(heading=0, wind_speed=5, start_rate=0.3, length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
@@ -480,9 +481,9 @@ if __name__ == '__main__':
     # plt.savefig('example_trail.svg')
 
 # %%
-    print(trail.sample(0, -0.1, return_rate=True))
+    print(trail.sample(0, -30, return_rate=True))
 
-    for _ in range(10):
-        print(trail.sample(0, -15) * 256)
+    # for _ in range(10):
+    #     print(trail.sample(0, -15) * 256)
 
-    trail.base_rate
+    # trail.base_rate

@@ -44,9 +44,14 @@ class CurriculumCallback(BaseCallback):
         for cb in self.next_lesson_callbacks:
             cb(self)
     
+    def _on_rollout_end(self) -> None:
+        print('STARTING UPDATE')
+        return super()._on_rollout_end()
+
     def _on_step(self) -> bool:
         self.curr_iter += 1
         if self.curr_iter > self.curr_ckpt['iters']:
+            print('HITTING CHECKPOINT')
             for cb in self.next_lesson_callbacks:
                 cb(self)
 
@@ -148,6 +153,8 @@ class Teacher:
             self.trans = self._interleave(self.training_env.get_attr('history'))
             self.trans_avg = self._average(self.training_env.get_attr('history'))
             print('AVG', self.trans_avg)
+            print('TRAIN_SUC', np.mean(np.hstack(self.training_env.get_attr('history'))))
+            print('TEST_SUC', success_prob)
             self.history[self.sched_idx].extend(self.trans)
             if self.logger:
                 self.logger.record('trajectory/sched_idx', self.sched_idx)
@@ -173,6 +180,7 @@ class Teacher:
 
             # truncate outlier averages
             if len(hs) < len(hist) // 2: 
+                print('TRUNC', hs)
                 break
 
             avgs.append(np.mean(hs))
@@ -331,12 +339,13 @@ class AdaptiveOscTeacher(Teacher):
 
 
 class AdaptiveExpTeacher(Teacher):
-    def __init__(self, tau=0.95, discount=0.8, decision_point=0.7, use_avg=True, aggressive_checking=False, **teacher_kwargs):
+    def __init__(self, tau=0.95, discount=0.8, decision_point=0.7, noise_range=0.1, use_avg=True, aggressive_checking=False, **teacher_kwargs):
         super().__init__(**teacher_kwargs)
         self.tau = tau
         self.discount = discount
         self.use_avg = use_avg
         self.decision_point = decision_point
+        self.noise_range = noise_range
         self.avgs = []
         self.aggressive_checking = aggressive_checking
 
@@ -371,14 +380,15 @@ class AdaptiveExpTeacher(Teacher):
         
         avg, last_avg = self.avgs[-1], self.avgs[-2]
 
-        if avg > self.decision_point:
+        if avg > self.decision_point + self.noise_range:
             if avg >= last_avg:
                 self.sched_idx = min(self.sched_idx + 1, self.sched_len - 1)
             else:
                 # self.sched_idx = max(self.sched_idx - 1, 0)
                 return
-        elif avg < last_avg:
-            self.sched_idx = max(self.sched_idx - 1, 0)
+        if avg < self.decision_point - self.noise_range:
+            if avg < last_avg:
+                self.sched_idx = max(self.sched_idx - 1, 0)
 
     def _consume_trans(self, trans):
         avg = self.avgs[-1] if len(self.avgs) > 0 else 0
