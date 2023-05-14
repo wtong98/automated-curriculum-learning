@@ -111,6 +111,14 @@ class Case:
 
 
 if __name__ == '__main__':
+    save_dir = Path('plume_runs')
+    if not save_dir.exists():
+        save_dir.mkdir()
+
+    rng = np.random.default_rng(None)
+    run_id = rng.integers(999999)
+    print('RUN ID', run_id)
+
     n_runs = 1
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1]
     # rates = [1, 0.9, 0.8, 0.7, 0.6, 0.5]
@@ -163,15 +171,14 @@ if __name__ == '__main__':
     discount = 0.975
     n_iters_per_ckpt = 3 * 1024
 
-    save_every = 5
+    save_every = 0
     cases = [
-        # Case('Final', FinalTaskTeacher),
         Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.375, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
         Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.4, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
-        # Case('Random', RandomTeacher),
+
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-        # Case('Adaptive (Exp)', AdaptiveExpTeacher, cb_params={'save_every': 1, 'save_path': 'trained/adp_exp'}),
+        # Case('Final', FinalTaskTeacher),
     ]
 
     for i in tqdm(range(n_runs)):
@@ -190,7 +197,7 @@ if __name__ == '__main__':
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
-    df.to_pickle('plume_results.pkl')
+    df.to_pickle(save_dir / f'plume_results_{run_id}.pkl')
 
 # %%
 
