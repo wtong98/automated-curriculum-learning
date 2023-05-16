@@ -141,8 +141,15 @@ class Case:
     cb_params: dict = field(default_factory=dict)
     runs: list = field(default_factory=list)
 
-# <codecell>
 if __name__ == '__main__':
+    save_dir = Path('plume_runs')
+    if not save_dir.exists():
+        save_dir.mkdir()
+
+    rng = np.random.default_rng(None)
+    run_id = rng.integers(999999)
+    print('RUN ID', run_id)
+
     n_runs = 1
     # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
@@ -156,7 +163,7 @@ if __name__ == '__main__':
         (70, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
         (100, [(0.5, 0.63)]),
-        (100, [(0.5, 0.66)]),
+        # (100, [(0.5, 0.66)]),
 
         # (110, [(0.5, 0.6)]),
         # (85, [(0.5, 0.6)]),
@@ -199,15 +206,18 @@ if __name__ == '__main__':
 
     inc_est_q_callback = EstimateQValCallback(sched=sched)
     adp_est_q_callback = EstimateQValCallback(sched=sched)
+
+    discount = 0.975
+    n_iters_per_ckpt = 3 * 1024
     
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
 
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.7}, cb_params={
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.675, 'noise_range': 0.025, 'discount': discount}, cb_params={
             # 'next_lesson_callbacks': [adp_est_q_callback]
         }),
 
-        Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7}, cb_params={
+        Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7, 'discount': discount}, cb_params={
             # 'next_lesson_callbacks': [inc_est_q_callback]
         }),
         Case('Random', RandomTeacher),
@@ -217,19 +227,19 @@ if __name__ == '__main__':
     for i in tqdm(range(n_runs)):
         for case in cases:
             print('RUNNING', case.name)
-            teacher = case.teacher(sched=sched, tau=0.9, **case.teacher_params)
+            teacher = case.teacher(sched=sched, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             model = make_model(env)
             # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=1_000_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000) 
             traj = [t[0] for t in traj]
             case.runs.append(traj)
         
     df = pd.DataFrame(cases)
-    df.to_pickle('meander_results.pkl')
+    df.to_pickle(save_dir / f'plume_results_{run_id}.pkl')
 
     # inc_probs = np.array(inc_est_q_callback.probs)
     # np.save('meander_inc_probs.npy', inc_probs)

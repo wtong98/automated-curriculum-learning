@@ -185,15 +185,11 @@ if __name__ == '__main__':
         for case in cases:
             print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
-            case.teacher_handle = teacher
+            # case.teacher_handle = teacher
             model = make_model(env)
             model.set_env(env)
-            # TODO: split each run into its own directory
-            # if 'save_path' in case.cb_params:
-            #     case.cb_params['save_path'] += f'/{i}'
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000)
-            traj = [t[0] for t in traj]
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
