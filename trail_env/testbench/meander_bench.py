@@ -142,7 +142,7 @@ class Case:
     runs: list = field(default_factory=list)
 
 if __name__ == '__main__':
-    save_dir = Path('plume_runs')
+    save_dir = Path('trail_runs')
     if not save_dir.exists():
         save_dir.mkdir()
 
