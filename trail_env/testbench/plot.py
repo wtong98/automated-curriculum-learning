@@ -44,23 +44,33 @@ class EstimateQValCallback:
 
         self.probs.append(ratios)
 
+def load_runs(run_dir):
+    run_dir = Path(run_dir)
+    df = None
+    for result_pkl in run_dir.iterdir():
+        if type(df) == type(None):
+            df = pd.read_pickle(result_pkl)
+        else:
+            tmp_df = pd.read_pickle(result_pkl)
+            df = pd.concat((df ,tmp_df))
+
+    def extract_plot_vals(row):
+        traj_lens = [len(traj) for traj in row['runs']]
+        assert len(traj_lens) == 1
+
+        return pd.Series([
+            row['name'],
+            traj_lens[0]
+        ], index=['name', 'traj_len'])
+
+    plot_df = df.apply(extract_plot_vals, axis=1)
+    return df, plot_df
+
 # <codecell>
-df = pd.read_pickle('remote/meander_results.pkl')
-
-def extract_plot_vals(row):
-    traj_lens = [len(traj) for traj in row['runs']]
-
-    return pd.Series([
-        row['name'],
-        traj_lens
-    ], index=['name', 'traj_lens'])
-
-
-plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
-
+df, plot_df = load_runs('remote/trail_runs')
 fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 
-ax = sns.barplot(plot_df, x='name', y='traj_lens', ax=axs[0])
+ax = sns.barplot(plot_df, x='name', y='traj_len', ax=axs[0])
 ax.set_ylabel('Steps')
 ax.set_xlabel('')
 
@@ -91,23 +101,10 @@ fig.tight_layout()
 plt.savefig('fig/meander_bench.png')
 
 # <codecell>
-df = pd.read_pickle('remote/plume_results.pkl')
-
-def extract_plot_vals(row):
-    traj_lens = [len(traj) for traj in row['runs']]
-
-    return pd.Series([
-        row['name'],
-        traj_lens
-    ], index=['name', 'traj_lens'])
-
-
-plot_df = df.apply(extract_plot_vals, axis=1).explode('traj_lens')
-
-
+df, plot_df = load_runs('remote/plume_runs')
 fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 
-ax = sns.barplot(plot_df, x='name', y='traj_lens', ax=axs[0])
+ax = sns.barplot(plot_df, x='name', y='traj_len', ax=axs[0])
 ax.set_ylabel('Iterations')
 ax.set_xlabel('')
 ax.set_title(f'Benchmarks')
@@ -120,17 +117,18 @@ ax.set_xticklabels(x_labs)
 
 ### PLOT TRAJECTORIES
 
-for k, row in df.iterrows():
-    if k == 2:
-        break
+ax_twin = axs[1].twinx()
+for k, row in df.iloc[:3].iterrows():
+    if row['name'] == 'Random':
+        continue
 
-    for i, traj in enumerate(row['runs']):
-        if i == 0:
-            axs[1].plot(traj, label=row['name'], color=f'C{k}', alpha=0.5)
-        else:
-            axs[1].plot(traj, color=f'C{k}', alpha=0.6)
+    traj = [lvl for lvl, _ in  row['runs'][0]]
+    probs = [p for _, p in  row['runs'][0]]
+    axs[1].plot(traj, color=f'C{k}', alpha=0.6)
+    ax_twin.plot(probs, color=f'C{k}', alpha=0.3, linestyle='dashed')
+    ax_twin.axhline(y=0.85)
     
-axs[1].set_xlim(xmax=60)
+# axs[1].set_xlim(xmax=60)
 axs[1].set_xlabel('Steps')
 axs[1].set_ylabel('Difficulty index')
 axs[1].legend(loc='lower right')

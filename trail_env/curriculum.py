@@ -231,7 +231,7 @@ class FinalTaskTeacher(Teacher):
         assert self.sched_idx == self.sched_len - 1
 
         _, prob = self.trajectory[-1]
-        if prob > self.prob_threshold:
+        if prob >= self.prob_threshold:
             raise StopIteration
 
 def env_fn(): return TrailEnv()
@@ -260,10 +260,10 @@ class IncrementalTeacher(Teacher):
             if self.sched_idx < self.sched_len - 1:
                 prob = self._test_student(self.target_env)
 
-            if prob > self.prob_threshold:
+            if prob >= self.prob_threshold:
                 raise StopIteration
         else:
-            if self.sched_idx == self.sched_len - 1 and prob > self.prob_threshold:
+            if self.sched_idx == self.sched_len - 1 and prob >= self.prob_threshold:
                 raise StopIteration
         
         trans = self.trans
@@ -298,7 +298,7 @@ class AdaptiveOscTeacher(Teacher):
         trans = self.history[self.sched_idx]
         _, prob = self.trajectory[-1]
 
-        if self.curr_idx == self.sched_len - 1 and prob > self.tau:
+        if self.curr_idx == self.sched_len - 1 and prob >= self.tau:
             raise StopIteration
 
         if self.do_jump(trans):
@@ -369,10 +369,10 @@ class AdaptiveExpTeacher(Teacher):
             if self.sched_idx < self.sched_len - 1:
                 prob = self._test_student(self.target_env)
 
-            if prob > self.tau:
+            if prob >= self.tau:
                 raise StopIteration
         else:
-            if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+            if self.sched_idx == self.sched_len - 1 and prob >= self.tau:
                 raise StopIteration
 
         if len(self.avgs) == 1:
@@ -428,7 +428,7 @@ class AdaptiveDoubleExpTeacher(Teacher):
             else:
                 self.sched_idx = max(self.sched_idx - 1, 0)
 
-        if self.sched_idx == self.sched_len - 1 and prob > self.tau:
+        if self.sched_idx == self.sched_len - 1 and prob >= self.tau:
             raise StopIteration
 
     def _consume_trans(self, trans):
@@ -490,7 +490,7 @@ class AdaptiveOscTeacherCont(Teacher):
                 self.clear_hist(self.sched_idx)
                 self.sched_idx = max(self.sched_idx // self.cut_factor, 1)
 
-        if self.sched_idx == self.goal_length and prob > 0.95:  # TODO: hardcoded
+        if self.sched_idx == self.goal_length and prob >= 0.95:  # TODO: hardcoded
             raise StopIteration
 
     def do_jump(self, trans, thresh=None):
@@ -536,7 +536,7 @@ class RandomTeacher(Teacher):
         if self.sched_idx < self.sched_len - 1:
             prob = self._test_student(self.target_env)
 
-        if prob > self.prob_threshold:
+        if prob >= self.prob_threshold:
             raise StopIteration
         
         self.sched_idx = np.random.choice(self.sched_len)

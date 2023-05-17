@@ -144,7 +144,7 @@ class Case:
 if __name__ == '__main__':
     save_dir = Path('trail_runs')
     if not save_dir.exists():
-        save_dir.mkdir()
+        save_dir.mkdir(exist_ok=True)
 
     rng = np.random.default_rng(None)
     run_id = rng.integers(999999)
@@ -209,6 +209,7 @@ if __name__ == '__main__':
 
     discount = 0.975
     n_iters_per_ckpt = 3 * 1024
+    tau = 0.95
     
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -227,7 +228,7 @@ if __name__ == '__main__':
     for i in tqdm(range(n_runs)):
         for case in cases:
             print('RUNNING', case.name)
-            teacher = case.teacher(sched=sched, tau=0.9, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
+            teacher = case.teacher(sched=sched, tau=tau, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             model = make_model(env)
             # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
@@ -239,7 +240,7 @@ if __name__ == '__main__':
             case.runs.append(traj)
         
     df = pd.DataFrame(cases)
-    df.to_pickle(save_dir / f'plume_results_{run_id}.pkl')
+    df.to_pickle(save_dir / f'meander_results_{run_id}.pkl')
 
     # inc_probs = np.array(inc_est_q_callback.probs)
     # np.save('meander_inc_probs.npy', inc_probs)
