@@ -22,7 +22,7 @@ from env import TrailEnv
 from curriculum import *
 from trail_map import *
 
-def make_model(env):
+def make_model(env, log_dir='log'):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=1024,
                 batch_size=256,
@@ -34,7 +34,7 @@ def make_model(env):
                 vf_coef=0.36,
                 n_epochs=5,
                 learning_rate=0.0001,
-                tensorboard_log='log',
+                tensorboard_log=log_dir,
                 policy_kwargs={
                     'net_arch': [{'pi': [128, 128], 'vf': [128, 128]}],
                     'activation_fn': torch.nn.ReLU
@@ -174,8 +174,8 @@ if __name__ == '__main__':
 
     save_every = 0
     cases = [
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.375, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.4, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.475, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.5, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
 
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -187,7 +187,7 @@ if __name__ == '__main__':
             print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=tau, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             # case.teacher_handle = teacher
-            model = make_model(env)
+            model = make_model(env, log_dir=None)
             model.set_env(env)
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000)
