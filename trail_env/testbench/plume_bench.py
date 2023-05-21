@@ -26,7 +26,8 @@ def make_model(env, log_dir='log'):
     return PPO("CnnPolicy", env, verbose=1,
                 n_steps=1024,
                 batch_size=256,
-                ent_coef=0.25,
+                # ent_coef=0.25,
+                ent_coef=0.15,
                 gamma=0.98,
                 gae_lambda=0.9,
                 clip_range=0.2,
@@ -187,7 +188,7 @@ if __name__ == '__main__':
             print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, trail_class=PlumeTrail, tau=tau, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             # case.teacher_handle = teacher
-            model = make_model(env, log_dir=None)
+            model = make_model(env, log_dir='log')
             model.set_env(env)
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
