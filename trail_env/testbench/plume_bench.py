@@ -139,7 +139,7 @@ if __name__ == '__main__':
     n_rates=3
 
     sec_rate = init_rate + n_rates * rate_jump
-    sec_rate_jump=0.65
+    sec_rate_jump=0.7
     n_rates2=3
 
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]

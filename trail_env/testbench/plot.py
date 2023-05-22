@@ -118,7 +118,7 @@ ax.set_xticklabels(x_labs)
 ### PLOT TRAJECTORIES
 
 ax_twin = axs[1].twinx()
-for k, row in df.iloc[6:].iterrows():
+for k, row in df.iloc[6:9].iterrows():
     if row['name'] == 'Random':
         continue
 
