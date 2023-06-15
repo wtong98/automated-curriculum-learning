@@ -212,7 +212,7 @@ if __name__ == '__main__':
 
     filename = f'plume_results_{run_id}.pkl'
     df.to_pickle(save_dir / filename)
-    os.system(f'gsutil cp {filename} gs://trail-track/plume_runs')
+    os.system(f'gsutil cp {save_dir/filename} gs://trail-track/plume_runs')
     print('done!')
 
 # %%
