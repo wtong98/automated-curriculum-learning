@@ -5,6 +5,7 @@ author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
 from dataclasses import dataclass, field
+import os
 from typing import Callable
 
 import matplotlib.pyplot as plt
@@ -208,7 +209,11 @@ if __name__ == '__main__':
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
-    df.to_pickle(save_dir / f'plume_results_{run_id}.pkl')
+
+    filename = f'plume_results_{run_id}.pkl'
+    df.to_pickle(save_dir / filename)
+    os.system(f'gsutil cp {filename} gs://trail-track/plume_runs')
+    print('done!')
 
 # %%
 
