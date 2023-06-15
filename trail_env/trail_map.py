@@ -335,6 +335,7 @@ class BrokenMeanderTrail(MeanderTrail):
 class PlumeTrail(TrailMap):
     def __init__(self, start=None,
                  start_rate=None,
+                 start_rate_range=None,
                  start_dist=None,
                  heading=None,
                  range=(-np.pi/4, np.pi/4),
@@ -364,11 +365,15 @@ class PlumeTrail(TrailMap):
         self.heading = np.random.uniform(*self.range)
 
         self.start_rate = start_rate
+        self.start_rate_range = start_rate_range
         self.start_dist = start_dist
 
         if start_rate:
-            self.y_max, self.y_min = np.real(self._compute_y(start_rate))
             start = self._sample_point(start_rate)
+        elif start_rate_range:
+            lo, hi = start_rate_range
+            inv_rate = np.random.uniform(1 / hi, 1 / lo)
+            start = self._sample_point(1 / inv_rate)
         elif start_dist:
             start = start_dist * np.array((-np.sin(self.heading), -np.cos(self.heading)))
         super().__init__(start, end=np.array((0,0)))
@@ -378,14 +383,13 @@ class PlumeTrail(TrailMap):
             self.max_steps = np.round(3 * dist)
         else:
             self.max_steps = max_steps
-    
 
-    # TODO: sample uniformly across whole level set
     def _sample_point(self, rate):
-        uppr = self.y_max
+        y_max, y_min = np.real(self._compute_y(rate))
+        uppr = y_max
         if self.distance_factor:
-            uppr = self.y_min * (1 - 1 / self.distance_factor)
-        y = np.random.uniform(self.y_min, uppr)
+            uppr = y_min * (1 - 1 / self.distance_factor)
+        y = np.random.uniform(y_min, uppr)
         dist = np.real(self._compute_dist(rate, y))
         x = np.sqrt(dist ** 2 - y ** 2)
 
@@ -457,6 +461,10 @@ class PlumeTrail(TrailMap):
         self.heading = np.random.uniform(*self.range)
         if self.start_rate != None:
             self.start = self._sample_point(self.start_rate)
+        elif self.start_rate_range:
+            lo, hi = self.start_rate_range
+            inv_rate = np.random.uniform(1 / hi, 1 / lo)
+            self.start = self._sample_point(1 / inv_rate)
         elif self.start_dist != None:
             self.start = self.start_dist * np.array((-np.sin(self.heading), -np.cos(self.heading)))
     
@@ -468,7 +476,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(heading=0, wind_speed=5, start_rate=0.3, length_scale=20, max_steps='auto')
+    trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 1], length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
@@ -477,7 +485,7 @@ if __name__ == '__main__':
     plt.xticks([])
     plt.yticks([])
 
-    print(trail.y_min)
+    print(trail.start)
     # plt.savefig('example_trail.svg')
 
 # %%

@@ -67,6 +67,17 @@ def to_sched(rates):
     sched = [dict(start_rate=r, max_steps='auto', **trail_args) for r in rates]
     return sched
 
+def to_sched_range(rate_ranges):
+    trail_args = {
+        'wind_speed': 5,
+        'length_scale': 20,
+        # 'range': (-np.pi, np.pi)
+        'heading': 0
+    }
+
+    sched = [dict(start_rate_range=r, max_steps='auto', **trail_args) for r in rate_ranges]
+    return sched
+
 def to_sched_dist(dists):
     trail_args = {
         'wind_speed': 5,
@@ -135,8 +146,9 @@ if __name__ == '__main__':
     # rate_jump = 0.1
     # n_rates = 24
 
-    init_rate = 0.5
+    init_rate = 0.75
     rate_jump=1
+    rate_spread = 0.5
     n_rates=3
 
     sec_rate = init_rate + n_rates * rate_jump
@@ -144,11 +156,11 @@ if __name__ == '__main__':
     n_rates2=3
 
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]
-    rates = [1 / r for r in inv_rates]
+    rates = [((1 / (r - rate_spread)), (1 / (r + rate_spread))) for r in inv_rates]
     print('RATES', rates)
-    sched = to_sched(rates)
-    dists = [PlumeTrail(**args).y_min for args in sched]
-    print('DISTS', dists)
+    sched = to_sched_range(rates)
+    # dists = [PlumeTrail(**args).y_min for args in sched]
+    # print('DISTS', dists)
 
     # dists = [10, 15, 20, 25, 30, 35]
     # sched = to_sched_dist(dists)
@@ -176,7 +188,7 @@ if __name__ == '__main__':
 
     save_every = 0
     cases = [
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.4, 'noise_range': 0.05, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.425, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
         Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.45, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
 
