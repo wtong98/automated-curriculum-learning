@@ -205,7 +205,8 @@ if __name__ == '__main__':
             model = make_model(env, log_dir='log')
             model.set_env(env)
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
+            # traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=250)
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
