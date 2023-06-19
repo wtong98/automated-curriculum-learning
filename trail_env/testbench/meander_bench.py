@@ -211,18 +211,23 @@ if __name__ == '__main__':
     n_iters_per_ckpt = 3 * 1024
     tau = 0.95
     
+    save_every=1
     cases = [
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
 
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.675, 'noise_range': 0.025, 'discount': discount}, cb_params={
-            # 'next_lesson_callbacks': [adp_est_q_callback]
-        }),
+        # Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.675, 'noise_range': 0.025, 'discount': discount}, cb_params={
+        #     # 'next_lesson_callbacks': [adp_est_q_callback]
+        # }),
 
-        Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7, 'discount': discount}, cb_params={
-            # 'next_lesson_callbacks': [inc_est_q_callback]
-        }),
-        Case('Random', RandomTeacher),
-        # Case('Final', FinalTaskTeacher),
+        # Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7, 'discount': discount}, cb_params={
+        #     # 'next_lesson_callbacks': [inc_est_q_callback]
+        # }),
+        # Case('Random', RandomTeacher),
+        # # Case('Final', FinalTaskTeacher),
+
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'trained/adp/{run_id}'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'trained/inc/{run_id}'}),
+        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'trained/rand/{run_id}'}),
     ]
 
     for i in tqdm(range(n_runs)):
