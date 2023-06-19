@@ -476,7 +476,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
-    trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 1], length_scale=20, max_steps='auto')
+    trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 0.3], length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 

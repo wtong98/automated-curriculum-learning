@@ -29,7 +29,7 @@ def make_model(env, log_dir='log'):
                 batch_size=256,
                 # ent_coef=0.25,
                 # ent_coef=0.15,
-                ent_coef=0.1,
+                ent_coef=0.05,
                 gamma=0.98,
                 gae_lambda=0.9,
                 clip_range=0.2,
@@ -147,14 +147,14 @@ if __name__ == '__main__':
     # rate_jump = 0.1
     # n_rates = 24
 
-    init_rate = 0.75
-    rate_jump=1
-    rate_spread = 0.5
-    n_rates=3
+    init_rate = 0.5
+    rate_jump=0.75
+    rate_spread = 0
+    n_rates=4
 
     sec_rate = init_rate + n_rates * rate_jump
-    sec_rate_jump=1
-    n_rates2=3
+    sec_rate_jump=0.75
+    n_rates2=4
 
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]
     rates = [((1 / (r - rate_spread)), (1 / (r + rate_spread))) for r in inv_rates]
@@ -185,12 +185,12 @@ if __name__ == '__main__':
     
     discount = 0.975
     n_iters_per_ckpt = 3 * 1024
-    tau=0.9
+    tau = 0.9
 
     save_every = 0
     cases = [
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.425, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.45, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
 
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
@@ -205,8 +205,8 @@ if __name__ == '__main__':
             model = make_model(env, log_dir='log')
             model.set_env(env)
 
-            # traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=250)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
+            # traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=250)
             case.runs.append(traj)
 
     df = pd.DataFrame(cases)
