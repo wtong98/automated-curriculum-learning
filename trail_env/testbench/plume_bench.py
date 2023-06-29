@@ -148,12 +148,12 @@ if __name__ == '__main__':
     # n_rates = 24
 
     init_rate = 0.5
-    rate_jump=0.8
+    rate_jump=1
     rate_spread = 0
     n_rates=4
 
     sec_rate = init_rate + n_rates * rate_jump
-    sec_rate_jump=0.8
+    sec_rate_jump=1
     n_rates2=4
 
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]
@@ -205,7 +205,7 @@ if __name__ == '__main__':
             model = make_model(env, log_dir='log')
             model.set_env(env)
 
-            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_500_000)
+            traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=3_000_000)
             # traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=250)
             case.runs.append(traj)
 
