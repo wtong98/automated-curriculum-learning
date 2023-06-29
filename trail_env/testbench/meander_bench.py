@@ -4,6 +4,7 @@ Benchmark performance of various teacher strategies
 author: William Tong (wtong@g.harvard.edu)
 """
 # <codecell>
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -142,11 +143,16 @@ class Case:
 
 if __name__ == '__main__':
     save_dir = Path('trail_runs')
+    
+    scratch_dir = os.getenv('SCRATCH')
+    if scratch_dir:
+        save_dir = Path(scratch_dir) / 'pehlevan_lab' / 'Lab' / 'wlt' / 'acl' / save_dir
+
     if not save_dir.exists():
-        save_dir.mkdir(exist_ok=True)
+        save_dir.mkdir(exist_ok=True, parents=True)
 
     rng = np.random.default_rng(None)
-    run_id = rng.integers(999999)
+    run_id = rng.integers(999_999_999)
     print('RUN ID', run_id)
 
     n_runs = 1
@@ -224,9 +230,9 @@ if __name__ == '__main__':
         # Case('Random', RandomTeacher),
         # # Case('Final', FinalTaskTeacher),
 
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'trained/adp/{run_id}'}),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'trained/inc/{run_id}'}),
-        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'trained/rand/{run_id}'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/adp/{run_id}'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/inc/{run_id}'}),
+        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/rand/{run_id}'}),
     ]
 
     for i in tqdm(range(n_runs)):

@@ -48,10 +48,11 @@ def env_fn(args):
     return TrailEnv(trail_map=MeanderTrail(**args))
 
 models_dirs = [
-    ('adp', Path('remote/trail_sample/adp/0'))
+    ('adp', Path('remote/trail_sample/adp/0')),
     ('inc', Path('remote/trail_sample/inc/0'))
 ]
 
+# <codecell>
 if __name__ == '__main__':
     n_procs = 24
     n_iters = 5
@@ -81,3 +82,15 @@ if __name__ == '__main__':
 
         np.save(f'meander_{name}_probs.npy', res)
     
+# <codecell>
+probs = np.load('remote/trail_sample/meander_inc_probs.npy')
+
+plt.gcf().set_size_inches(8, 2)
+ax = plt.gca()
+
+qr = np.copy(probs)
+qr = np.flip(qr.T, axis=0)
+im = ax.imshow(qr, aspect='auto')
+
+plt.gcf().tight_layout()
+# %%
