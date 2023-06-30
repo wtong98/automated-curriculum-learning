@@ -47,9 +47,11 @@ def test_student(student, env, n_iters=5):
 def env_fn(args): 
     return TrailEnv(trail_map=MeanderTrail(**args))
 
+save_dir = Path('/n/holyscratch01/pehlevan_lab/Lab/wlt/acl/trail_runs/trained')
+
 models_dirs = [
-    ('adp', Path('remote/trail_sample/adp/0')),
-    ('inc', Path('remote/trail_sample/inc/0'))
+    ('adp', save_dir / 'adp/0'),
+    ('inc', save_dir / 'inc/0')
 ]
 
 # <codecell>
@@ -83,14 +85,21 @@ if __name__ == '__main__':
         np.save(f'meander_{name}_probs.npy', res)
     
 # <codecell>
-probs = np.load('remote/trail_sample/meander_inc_probs.npy')
+'''
+probs = np.load('remote/trail_sample/meander_adp_probs.npy')
 
 plt.gcf().set_size_inches(8, 2)
 ax = plt.gca()
 
-qr = np.copy(probs)
+
+ratio = probs[:,1:] / (probs[:,:-1] + 1e-8)
+ratio = np.concatenate((probs[:,[0]], ratio), axis=1)
+ratio = np.clip(ratio, 0.01, 0.99)
+qr = np.log(ratio / (1 - ratio))
+
 qr = np.flip(qr.T, axis=0)
 im = ax.imshow(qr, aspect='auto')
 
 plt.gcf().tight_layout()
+'''
 # %%
