@@ -85,21 +85,30 @@ if __name__ == '__main__':
         np.save(f'meander_{name}_probs.npy', res)
     
 # <codecell>
-'''
-probs = np.load('remote/trail_sample/meander_adp_probs.npy')
+df = pd.read_pickle('remote/trail_sample/meander_results.pkl')
+traj = np.array(df.runs[1][0])
 
-plt.gcf().set_size_inches(8, 2)
+probs = np.load('remote/trail_sample/meander_inc_probs.npy')
+
+plt.gcf().set_size_inches(8, 3)
 ax = plt.gca()
 
+ticks = np.arange(6)
+ax.set_yticks(ticks, np.flip(np.arange(6) + 1))
+ax.set_ylabel('N')
+ax.set_xlabel('Steps')
 
 ratio = probs[:,1:] / (probs[:,:-1] + 1e-8)
 ratio = np.concatenate((probs[:,[0]], ratio), axis=1)
 ratio = np.clip(ratio, 0.01, 0.99)
 qr = np.log(ratio / (1 - ratio))
 
+qr = probs
 qr = np.flip(qr.T, axis=0)
 im = ax.imshow(qr, aspect='auto')
 
+ax.plot(4.6 - traj, color='red', linewidth=3)
+
 plt.gcf().tight_layout()
-'''
+plt.savefig('fig/trail_inc_probs.png')
 # %%

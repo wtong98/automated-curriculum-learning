@@ -148,12 +148,12 @@ if __name__ == '__main__':
     # n_rates = 24
 
     init_rate = 0.5
-    rate_jump=1
+    rate_jump=0.75
     rate_spread = 0
     n_rates=4
 
     sec_rate = init_rate + n_rates * rate_jump
-    sec_rate_jump=1
+    sec_rate_jump=0.75
     n_rates2=4
 
     inv_rates = [init_rate + i * rate_jump for i in range(n_rates)] + [sec_rate + i * sec_rate_jump for i in range(n_rates2)]
@@ -191,7 +191,7 @@ if __name__ == '__main__':
     cases = [
         Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
         Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
-        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
+        # Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
 
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Final', FinalTaskTeacher),

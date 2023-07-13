@@ -101,7 +101,7 @@ fig.tight_layout()
 plt.savefig('fig/meander_bench.png')
 
 # <codecell>
-df, plot_df = load_runs('remote/plume_runs')
+df, plot_df = load_runs('remote/plume_runs_0.75_keep')
 fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 
 # ax = sns.barplot(plot_df, x='name', y='traj_len', ax=axs[0])
@@ -119,7 +119,7 @@ ax.set_xticklabels(x_labs)
 ### PLOT TRAJECTORIES
 
 ax_twin = axs[1].twinx()
-for k, row in df.iloc[6:9].iterrows():
+for k, row in df.iloc[:3].iterrows():
     if row['name'] == 'Random':
         continue
 
