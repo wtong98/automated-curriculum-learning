@@ -28,7 +28,7 @@ class CurriculumCallback(BaseCallback):
 
         self.save_path = Path(save_path)
         if not self.save_path.exists():
-            self.save_path.mkdir(parents=True)
+            self.save_path.mkdir(parents=True, exist_ok=True)
 
         self.curr_iter = 0
         self.curr_gen = 0
