@@ -14,36 +14,6 @@ sys.path.append('../')
 from env import *
 from curriculum import *
 
-class EstimateQValCallback:
-    def __init__(self, sched: list, trail_class=MeanderTrail, n_tests=10) -> None:
-        self.sched = sched
-        self.trail_class = trail_class
-        self.probs = []
-        self.n_tests = n_tests
-
-    def __call__(self, cb: CurriculumCallback):
-        prob_succ = [1]
-        prob = 1
-        for args in tqdm(self.sched):
-            if prob != 0:
-                prob = self._test_student(cb.teacher.student, args)
-            else:
-                print('warn: zero prob, skipping')
-
-            prob_succ.append(prob)
-
-        # prob_succ = np.array([1] + [self._test_student(cb.teacher.student, args) for args in tqdm(self.sched)])
-        prob_succ = np.array(prob_succ)
-        print('PROBS', prob_succ)
-
-        ratios = prob_succ[1:] / prob_succ[:-1]
-        print('RATIOS', ratios)
-
-        qs = logit(ratios)
-        print('QS', qs)
-
-        self.probs.append(ratios)
-
 def load_runs(run_dir):
     run_dir = Path(run_dir)
     df = None

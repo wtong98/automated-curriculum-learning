@@ -126,8 +126,13 @@ class Case:
 
 if __name__ == '__main__':
     save_dir = Path('plume_runs')
+    
+    scratch_dir = os.getenv('SCRATCH')
+    if scratch_dir:
+        save_dir = Path(scratch_dir) / 'pehlevan_lab' / 'Lab' / 'wlt' / 'acl' / save_dir
+
     if not save_dir.exists():
-        save_dir.mkdir(exist_ok=True)
+        save_dir.mkdir(exist_ok=True, parents=True)
 
     rng = np.random.default_rng(None)
     run_id = rng.integers(999999)
@@ -189,9 +194,9 @@ if __name__ == '__main__':
 
     save_every = 0
     cases = [
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/adp_tmp'}),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': 'trained/inc_tmp'}),
-        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': 'trained/rand'}),
+        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/adp/{run_id}'}),
+        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/inc/{run_id}'}),
+        # Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/rand/{run_id}'}),
 
         # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
         # Case('Final', FinalTaskTeacher),
