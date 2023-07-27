@@ -50,8 +50,8 @@ def env_fn(args):
 save_dir = Path('/n/holyscratch01/pehlevan_lab/Lab/wlt/acl/trail_runs/trained')
 
 models_dirs = [
-    ('adp', save_dir / 'adp/0'),
-    ('inc', save_dir / 'inc/0')
+    ('adp', save_dir / 'adp/all'),
+    ('inc', save_dir / 'inc/all')
 ]
 
 # <codecell>
@@ -59,30 +59,33 @@ if __name__ == '__main__':
     n_procs = 24
     n_iters = 5
 
-    for name, model_dir in models_dirs:
+    for name, teacher_dir in models_dirs:
         print('Processing', name)
 
-        save_files = list(model_dir.iterdir())
-        n_saves = len(save_files)
-        n_lvls = len(sched)
+        for model_dir in teacher_dir.iterdir():
+            print('reading', model_dir.name)
 
-        res = np.zeros((n_saves, n_lvls))
-        for fp in tqdm(save_files):
-            if fp.name == 'gen_final.zip':
-                save_idx = n_saves - 1
-            else:
-                num = re.findall(r'\d+', fp.name)[0]
-                save_idx = int(num) - 1
-            
-            for i, args in enumerate(sched):
-                env = SubprocVecEnv(n_procs * [functools.partial(env_fn, args=args)])
-                model = make_model(env)
-                model.set_parameters(fp)
+            save_files = list(model_dir.iterdir())
+            n_saves = len(save_files)
+            n_lvls = len(sched)
 
-                succ = test_student(model, env, n_iters=n_iters)
-                res[save_idx, i] = succ
+            res = np.zeros((n_saves, n_lvls))
+            for fp in tqdm(save_files):
+                if fp.name == 'gen_final.zip':
+                    save_idx = n_saves - 1
+                else:
+                    num = re.findall(r'\d+', fp.name)[0]
+                    save_idx = int(num) - 1
+                
+                for i, args in enumerate(sched):
+                    env = SubprocVecEnv(n_procs * [functools.partial(env_fn, args=args)])
+                    model = make_model(env)
+                    model.set_parameters(fp)
 
-        np.save(f'meander_{name}_probs.npy', res)
+                    succ = test_student(model, env, n_iters=n_iters)
+                    res[save_idx, i] = succ
+
+            np.save(f'meander_{name}_probs.{model_dir.name}.npy', res)
     
 # <codecell>
 df = pd.read_pickle('remote/trail_sample/meander_results.pkl')
