@@ -11,7 +11,12 @@ import re
 import sys
 sys.path.append('../')
 
+import matplotlib
+
 from meander_bench import *
+
+matplotlib.rcParams['font.sans-serif'] = "Arial"
+matplotlib.rcParams['font.family'] = "sans-serif"
 
 sched = [
     (10, [(0.5, 0.6)]),
@@ -155,6 +160,7 @@ for idx, res in estimates.items():
         plt.clf()
     
 # <codecell>
+# TODO: rework smoothing scheme for improving visualization
 df = pd.read_pickle('remote/trail_sample/meander_results.pkl')
 traj = np.array(df.runs[1][0])
 
@@ -168,16 +174,16 @@ ax.set_yticks(ticks, np.flip(np.arange(6) + 1))
 ax.set_ylabel('N')
 ax.set_xlabel('Steps')
 
-ratio = probs[:,1:] / (probs[:,:-1] + 1e-8)
-ratio = np.concatenate((probs[:,[0]], ratio), axis=1)
-ratio = np.clip(ratio, 0.01, 0.99)
-qr = np.log(ratio / (1 - ratio))
+# ratio = probs[:,1:] / (probs[:,:-1] + 1e-8)
+# ratio = np.concatenate((probs[:,[0]], ratio), axis=1)
+# ratio = np.clip(ratio, 0.01, 0.99)
+# qr = np.log(ratio / (1 - ratio))
 
 qr = probs
 qr = np.flip(qr.T, axis=0)
-im = ax.imshow(qr, aspect='auto')
+im = ax.imshow(qr, aspect='auto', vmin=0, vmax=1.1, cmap='Greys')
 
-ax.plot(4.6 - traj, color='red', linewidth=3)
+ax.plot(4.6 - traj, color='C3', linewidth=2)
 
 plt.gcf().tight_layout()
 # plt.savefig('fig/trail_inc_probs.png')
