@@ -224,7 +224,7 @@ if __name__ == '__main__':
 # %%
 
 # <codecell>
-'''
+# '''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):
@@ -394,7 +394,7 @@ trail_args = {
 }
 
 model = PPO.load(model_path, device='cpu')
-n_samps = 25
+n_samps = 5
 
 path = Path(f'plume_examples_inc/')
 if not path.exists():
@@ -440,8 +440,8 @@ for i in tqdm(range(n_samps)):
         y_max = max(10, np.max(p_hist[:,1]))
 
         m.plot(ax=ax, x_lim=(x_min-20, x_max+20), y_lim=(y_min - 20, y_max + 20))
-        ax.plot(p_hist[:,0], p_hist[:,1], linewidth=2, color='black')
-        ax.scatter(odor_hist[:,1], odor_hist[:,2], color='red', alpha=0.8, s=30)
+        ax.plot(p_hist[:,0], p_hist[:,1], linewidth=1.5, color='black')
+        ax.scatter(odor_hist[:,1], odor_hist[:,2], color='darkturquoise', alpha=0.8, s=20)
 
     ratio = (y_max - y_min + 40) / (x_max - x_min + 40)
     height = 6 * ratio

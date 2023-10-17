@@ -22,6 +22,7 @@ sys.path.append('../')
 
 from env import TrailEnv
 from curriculum import *
+from util import run_model, plot_run
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
@@ -258,37 +259,9 @@ if __name__ == '__main__':
     # adp_probs = np.array(adp_est_q_callback.probs)
     # np.save('meander_adp_probs.npy', adp_probs)
 
-# <codecell>
-'''
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-
-    for i, case in enumerate(cases):
-        label = {'label': case.name}
-        for run in case.traj:
-            axs[0].plot(run, color=f'C{i}', alpha=0.7, **label)
-            label = {}
-
-    axs[0].legend()
-    axs[0].set_xlabel('Iteration')
-    axs[0].set_ylabel('Schedule index')
-    # axs[0].set_yticks(np.arange(len(sched)))
-
-    # axs[0].set_xlim((800, 900))
-
-    all_lens = [[len(run) for run in case.traj] for case in cases]
-    all_means = [np.mean(lens) for lens in all_lens]
-    all_serr = [2 * np.std(lens) / np.sqrt(n_runs) for lens in all_lens]
-    all_names = [case.name for case in cases]
-
-    axs[1].bar(np.arange(len(cases)), all_means, tick_label=all_names, yerr=all_serr)
-    axs[1].set_ylabel('Iterations')
-
-    fig.suptitle(f'Trail sched')
-    fig.tight_layout()
-    plt.savefig('trained/osc_break_ii/0/tt_trajs.png')
-
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
+# '''
 save_path = Path('trained/adp/0/')
 max_gen = 68
 
@@ -405,62 +378,19 @@ trail_args = {
 trail_args['length'] = 500
 trail_args['breaks'] = [(0.3, 0.32), (0.5, 0.53), (0.7, 0.72)]
 
-model = PPO.load(model_path, device='cpu')
-n_samps = 25
+n_samps = 5
 
 path = Path(f'trail_examples/')
 if not path.exists():
     path.mkdir()
 
 for i in tqdm(range(n_samps)):
-
-    maps = []
-    position_hists = []
-
-    # print('preparing to generate headings')
     trail_map = MeanderTrail(**trail_args, heading=0)
     trail_map.max_steps = 1000
 
-    env = TrailEnv(trail_map, discrete=True, treadmill=True)
-    
-
-    obs = env.reset()
-    while True:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, is_done, _ = env.step(action)
-
-        if is_done:
-            break
-
-    # print('gen heading')
-    maps.append(trail_map)
-    position_hists.append(np.array(env.agent.position_history))
-
-    fig, axs = plt.subplots(1, 1, figsize=(6, 12))
-
-    for ax, m, p_hist in zip([axs], maps, position_hists):
-        y_min = np.min(m.y_coords)
-        y_max = np.max(m.y_coords)
-
-        x_min = np.min(m.x_coords)
-        x_max = np.max(m.x_coords)
-
-        m.plot(ax=ax, xmin=x_min-20, xmax=x_max+20, ymin=y_min - 20, ymax=y_max + 20)
-        ax.plot(p_hist[:,0], p_hist[:,1], linewidth=2, color='black')
-
-    ratio = (y_max - y_min + 40) / (x_max - x_min + 40)
-    height = 6 * ratio
-
-    fig.set_size_inches((6, height))
-    fig.tight_layout()
-
-    plt.axis('off')
-    plt.savefig(str(path / f'example_{i}.png'))
-    # np.save(str(path / f'positions_{i}.npy'), p_hist)
-    # with (path / f'map_{i}.pkl').open('wb') as fp:
-    #     pickle.dump(m, fp)
-    
+    pos_hist = run_model(model_path, trail_map)
     plt.clf()
+    plot_run(trail_map, pos_hist, save_path=path / f'example_{i}.png')
 
 # %%
 '''

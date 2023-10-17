@@ -8,6 +8,7 @@ author: William Tong
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 from scipy.special import lambertw
 
 
@@ -250,32 +251,43 @@ class MeanderTrail(TrailMap):
         return np.exp(- np.min(dist2) / self.width)
 
     
-    def plot(self, res=200, ax=None, xmin=-120, xmax=120, ymin=-120, ymax=120):
-        x = np.linspace(xmin, xmax, res)
-        y = np.linspace(ymin, ymax, res)
+    def plot(self, res=200, ax=None, x_lim=None, y_lim=None, auto_aspect=True):
+        if x_lim is None:
+            x_lim = np.min(self.x_coords) - 20, np.max(self.x_coords) + 20
+        if y_lim is None:
+            y_lim = np.min(self.y_coords) - 20, np.max(self.y_coords) + 20
+
+        x = np.linspace(*x_lim, res)
+        y = np.linspace(*y_lim, res)
         xx, yy = np.meshgrid(x, y)
 
         odors = np.array([self.sample(x, y) for x, y in zip(xx.ravel(), yy.ravel())])
         odors = odors.reshape(res, res)
 
-        ckpt_x, ckpt_y = self.checkpoints.T if len(self.checkpoints) > 0 else (0, 0)
+        if ax is None:
+            ax = plt.gca()
 
-        if ax:
-            ax.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
-            ax.contourf(x, y, odors, cmap='Greens', alpha=0.3)
-            ax.scatter(ckpt_x, ckpt_y, color='red')
+        ax.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
+        ax.contourf(x, y, odors, cmap='Greens', alpha=0.3)
 
-            circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=3, color='blue', zorder=100, alpha=0.7)
-            return ax.add_patch(circle)
-        else:
-            plt.gcf().set_size_inches(8, 8)
-            plt.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
-            mbp = plt.contourf(x, y, odors, cmap='Greens', alpha=0.3)
-            plt.scatter(ckpt_x, ckpt_y, color='red')
-            plt.colorbar(mbp)
+        circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=1, color='blue', zorder=100, alpha=0.7)
 
-            circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=3, color='blue', zorder=100, alpha=0.7)
-            plt.gca().add_patch(circle)
+        if auto_aspect:
+            fig = plt.gcf()
+
+            ratio = (y_lim[1] - y_lim[0] + 40) / (x_lim[1] - x_lim[0] + 40)
+            height = 6 * ratio
+
+            fig.set_size_inches((6, height))
+            fig.tight_layout()
+        
+        root = self.x_coords[-1] - 1.5, self.y_coords[-1] - 1.5
+        rect = plt.Rectangle(root, 3, 3, color='darkmagenta', fill=False)
+
+        # ax.add_patch(circle)
+        ax.add_patch(rect)
+
+        
 
 
     def reset(self):
@@ -437,7 +449,12 @@ class PlumeTrail(TrailMap):
             samp = np.random.poisson(rate) / 50  # TODO: or binary?
             return samp.item()
 
-    def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-50, 10)):
+    def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-60, 10), auto_aspect=True):
+        # if x_lim is None:
+        #     x_lim = np.min(self.x_coords) - 20, np.max(self.x_coords) + 20
+        # if y_lim is None:
+        #     y_lim = np.min(self.y_coords) - 20, np.max(self.y_coords) + 20
+
         x = np.linspace(*x_lim, 100)
         y = np.linspace(*y_lim, 100)
         xx, yy = np.meshgrid(x, y)
@@ -445,17 +462,29 @@ class PlumeTrail(TrailMap):
         odors_contours = np.array([self.sample(px, py, return_rate=True) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
         odors_samples = np.array([self.sample(px, py, return_rate=False) for px, py in zip(xx.ravel(), yy.ravel())]).reshape(xx.shape)
 
-        lvls = np.arange(0, 1, 0.05)
-        if ax != None:
-            ax.plot(*self.start, marker='o', markersize=10, color='blue')
-            # ax.contourf(x, y, odors_samples, levels=lvls, cmap='Greens', alpha=1)
-            ax.contourf(x, y, odors_contours, cmap='viridis', alpha=1)
-            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.5, levels=lvls)
-        else:
-            plt.plot(*self.start, marker='o', markersize=10, color='blue')
-            plt.contourf(x, y, odors_samples, levels=lvls, cmap='viridis', alpha=1)
-            plt.colorbar()
-            plt.contour(x, y, odors_contours, cmap='Reds', alpha=0.1, levels=lvls)
+        if auto_aspect:
+            fig = plt.gcf()
+
+            ratio = (y_lim[1] - y_lim[0] + 40) / (x_lim[1] - x_lim[0] + 40)
+            height = 6 * ratio
+
+            fig.set_size_inches((6, height))
+            fig.tight_layout()
+        
+        lvls = np.arange(0, 2, 0.05)
+        lvls = 1 / np.linspace(10, 0.05, 20)
+        if ax is None:
+            ax = plt.gca()
+
+        ax.plot(*self.start, marker='o', markersize=5, color='black')
+        mbp = ax.contourf(x, y, odors_contours, levels=lvls, cmap='Greens', alpha=0.7, norm=colors.LogNorm(vmin=min(lvls), vmax=max(lvls)))
+        # ax.contourf(x, y, odors_contours, cmap='viridis', alpha=1)
+        # ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.5, levels=lvls)
+
+        circle = plt.Circle((0, 0), radius=1, color='green', zorder=100, alpha=0.9)
+        rect = plt.Rectangle([-1.5, -1.5], 3, 3, color='darkmagenta', fill=False)
+        ax.add_patch(circle)
+        ax.add_patch(rect)
 
     def reset(self):
         self.heading = np.random.uniform(*self.range)
@@ -476,6 +505,7 @@ class PlumeTrail(TrailMap):
 
 
 if __name__ == '__main__':
+    # TODO: prettify plume trail plotting
     trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 0.3], length_scale=20, max_steps='auto')
     # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
