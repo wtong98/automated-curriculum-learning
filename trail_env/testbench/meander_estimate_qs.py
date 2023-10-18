@@ -181,7 +181,7 @@ ax.set_xlabel('Steps')
 
 qr = probs
 qr = np.flip(qr.T, axis=0)
-im = ax.imshow(qr, aspect='auto', vmin=0, vmax=1.1, cmap='Greys')
+im = ax.imshow(qr, aspect='auto', vmin=0, vmax=1.1, cmap='viridis')
 
 ax.plot(4.6 - traj, color='C3', linewidth=2)
 

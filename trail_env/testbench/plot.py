@@ -40,7 +40,7 @@ def load_runs(run_dir):
 df, plot_df = load_runs('remote/trail_runs')
 fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 
-ax = sns.barplot(plot_df, x='name', y='traj_len', ax=axs[0])
+ax = sns.boxplot(plot_df, x='name', y='traj_len', ax=axs[0])
 ax.set_ylabel('Steps')
 ax.set_xlabel('')
 
@@ -68,7 +68,7 @@ axs[1].legend(loc='lower right')
 axs[1].set_title('Trajectory')
 
 fig.tight_layout()
-plt.savefig('fig/meander_bench.png')
+# plt.savefig('fig/meander_bench.png')
 
 # <codecell>
 df, plot_df = load_runs('remote/plume_runs')
@@ -106,7 +106,7 @@ axs[1].legend(loc='lower right')
 axs[1].set_title('Trajectory')
 
 fig.tight_layout()
-plt.savefig('fig/plume_bench.png')
+# plt.savefig('fig/plume_bench.png')
 # %%
 ### PLOT EST Q-Values (meander)
 df = pd.read_pickle('meander_results.pkl')

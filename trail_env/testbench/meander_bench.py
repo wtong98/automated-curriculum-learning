@@ -261,7 +261,7 @@ if __name__ == '__main__':
 
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
-# '''
+'''
 save_path = Path('trained/adp/0/')
 max_gen = 68
 

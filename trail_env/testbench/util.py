@@ -25,10 +25,11 @@ def run_model(model_path, trail_map):
     return np.array(env.agent.position_history)
 
 
-def plot_run(trail_map, pos_hist, save_path=None):
-    ax = plt.gca()
+def plot_run(trail_map, pos_hist, save_path=None, ax=None, **plot_kwargs):
+    if ax is None:
+        ax = plt.gca()
 
-    trail_map.plot(ax=ax)
+    trail_map.plot(ax=ax, **plot_kwargs)
     ax.plot(pos_hist[:,0], pos_hist[:,1], linewidth=2, color='black')
 
     # fig.tight_layout()
