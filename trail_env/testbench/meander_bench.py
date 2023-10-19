@@ -232,8 +232,8 @@ if __name__ == '__main__':
         # # Case('Final', FinalTaskTeacher),
 
         Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/adp/{run_id}'}),
-        Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/inc/{run_id}'}),
-        Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/rand/{run_id}'}),
+        # Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/inc/{run_id}'}),
+        # Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/rand/{run_id}'}),
     ]
 
     for i in tqdm(range(n_runs)):
