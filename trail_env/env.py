@@ -284,4 +284,4 @@ if __name__ == '__main__':
     # agent.is_egocentric = False
 
     obs = agent.make_observation()
-    plt.imshow(obs)
+    plt.imshow(obs / np.max(obs))

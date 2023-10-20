@@ -7,6 +7,7 @@ author: William Tong (wtong@g.harvard.edu)
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+import shutil
 
 from typing import Callable
 import matplotlib.pyplot as plt
@@ -22,7 +23,7 @@ sys.path.append('../')
 
 from env import TrailEnv
 from curriculum import *
-from util import run_model, plot_run
+from util import run_model, plot_run, plot_observations
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
@@ -261,7 +262,7 @@ if __name__ == '__main__':
 
 
 # %%  SHOWCASE PERFORMANCE IN PLOTS
-'''
+# '''
 save_path = Path('trained/adp/0/')
 max_gen = 68
 
@@ -366,7 +367,8 @@ plt.savefig('tmp.png')
 # %%
 # MANY LONG PLOTS
 
-model_path = Path('trained/osc_break_ii/0/gen172.zip')
+# model_path = Path('trained/osc_break_ii/0/gen172.zip')
+model_path = Path('trained/remote/meander_gold.zip')
 
 trail_args = {
     'width': 5,
@@ -388,9 +390,11 @@ for i in tqdm(range(n_samps)):
     trail_map = MeanderTrail(**trail_args, heading=0)
     trail_map.max_steps = 1000
 
-    pos_hist = run_model(model_path, trail_map)
+    pos_hist, info = run_model(model_path, trail_map)
     plt.clf()
     plot_run(trail_map, pos_hist, save_path=path / f'example_{i}.png')
+    plot_observations(info['obs'], path)
 
-# %%
+
+# <codecell>
 '''

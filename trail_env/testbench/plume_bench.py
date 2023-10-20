@@ -6,6 +6,7 @@ author: William Tong (wtong@g.harvard.edu)
 # <codecell>
 from dataclasses import dataclass, field
 import os
+import shutil
 from typing import Callable
 
 import matplotlib.pyplot as plt
@@ -22,6 +23,7 @@ sys.path.append('../')
 from env import TrailEnv
 from curriculum import *
 from trail_map import *
+from util import run_model, plot_observations
 
 def make_model(env, log_dir='log'):
     return PPO("CnnPolicy", env, verbose=1,
@@ -221,10 +223,9 @@ if __name__ == '__main__':
     os.system(f'gsutil cp {save_dir/filename} gs://trail-track/plume_runs')
     print('done!')
 
-# %%
 
 # <codecell>
-'''
+# '''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):
@@ -380,7 +381,8 @@ fig.tight_layout()
 # <codecell>
 ### MANY LARGE PLOTS
 # model_path = Path('trained/plume_rate/0/gen30.zip')
-model_path = Path('trained/inc_tmp/gen65.zip')
+# model_path = Path('trained/inc_tmp/gen65.zip')
+model_path = Path('trained/remote/plume_gold.zip')
 
 trail_args = {
     'wind_speed': 5,
@@ -393,10 +395,9 @@ trail_args = {
     # 'emission_rate': 0.47
 }
 
-model = PPO.load(model_path, device='cpu')
 n_samps = 5
 
-path = Path(f'plume_examples_inc/')
+path = Path(f'plume_examples/')
 if not path.exists():
     path.mkdir()
 
@@ -406,26 +407,13 @@ for i in tqdm(range(n_samps)):
     position_hists = []
     odor_hists = []
 
-    # print('preparing to generate headings')
     trail_map = PlumeTrail(**trail_args)
-    # trail_map.max_steps = 1000
-    print('RATE', trail_map.start_rate)
+    _, info = run_model(model_path, trail_map)
+    agent = info['agent']
 
-    env = TrailEnv(trail_map, discrete=True, treadmill=True)
-    
-
-    obs = env.reset()
-    while True:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, is_done, _ = env.step(action)
-
-        if is_done:
-            break
-
-    # print('gen heading')
     maps.append(trail_map)
-    position_hists.append(np.array(env.agent.position_history))
-    odor_hists.append(env.agent.odor_history)
+    position_hists.append(np.array(agent.position_history))
+    odor_hists.append(agent.odor_history)
 
     fig, axs = plt.subplots(1, 1, figsize=(6, 12))
 
@@ -451,11 +439,11 @@ for i in tqdm(range(n_samps)):
 
     plt.axis('off')
     plt.savefig(str(path / f'example_{i}.png'))
-    # np.save(str(path / f'positions_{i}.npy'), p_hist)
-    # with (path / f'map_{i}.pkl').open('wb') as fp:
-    #     pickle.dump(m, fp)
     
     plt.clf()
+
+    plot_observations(info['obs'], path)
+
 
 # <codecell>
 '''
