@@ -166,7 +166,7 @@ traj = np.array(df.runs[1][0])
 
 probs = np.load('remote/trail_sample/meander_inc_probs.npy')
 
-plt.gcf().set_size_inches(8, 3)
+plt.gcf().set_size_inches(10, 2)
 ax = plt.gca()
 
 ticks = np.arange(6)
@@ -179,12 +179,19 @@ ax.set_xlabel('Steps')
 # ratio = np.clip(ratio, 0.01, 0.99)
 # qr = np.log(ratio / (1 - ratio))
 
-qr = probs
+
+log_probs = np.log(probs + 1e-10)
+qr = log_probs[:,1:] - log_probs[:,:-1]
+qr = np.concatenate((log_probs[:,[0]], qr), axis=1)
+# qr = np.log(probs[:,1:] + 1e-8) - np.log(probs[:,:-1] + 1e-8)
+
 qr = np.flip(qr.T, axis=0)
-im = ax.imshow(qr, aspect='auto', vmin=0, vmax=1.1, cmap='viridis')
+# im = ax.imshow(qr, aspect='auto', vmin=0, vmax=1.1, cmap='viridis')
+im = ax.imshow(qr, aspect='auto', vmin=-1, vmax=1, cmap='viridis')
 
 ax.plot(4.6 - traj, color='C3', linewidth=2)
 
+plt.colorbar(im)
 plt.gcf().tight_layout()
 # plt.savefig('fig/trail_inc_probs.png')
 # %%
