@@ -225,7 +225,7 @@ if __name__ == '__main__':
 
 
 # <codecell>
-# '''
+'''
     fig, axs = plt.subplots(1, 2, figsize=(10, 4))
 
     for i, case in enumerate(cases):

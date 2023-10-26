@@ -6,6 +6,7 @@ author: William Tong
 
 # <codecell>
 from typing import List, Tuple
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -288,8 +289,6 @@ class MeanderTrail(TrailMap):
         ax.add_patch(rect)
 
         
-
-
     def reset(self):
         self.x_coords, self.y_coords, self.checkpoints = self._sample_trail()
         self.end = np.array([self.x_coords[-1], self.y_coords[-1]])
@@ -471,8 +470,8 @@ class PlumeTrail(TrailMap):
             fig.set_size_inches((6, height))
             fig.tight_layout()
         
-        lvls = np.arange(0, 2, 0.05)
-        lvls = 1 / np.linspace(10, 0.05, 20)
+        lvls = 1 / np.linspace(15, 0.05, 18)
+        print('LVLS', lvls)
         if ax is None:
             ax = plt.gca()
 
@@ -485,6 +484,10 @@ class PlumeTrail(TrailMap):
         rect = plt.Rectangle([-1.5, -1.5], 3, 3, color='darkmagenta', fill=False)
         ax.add_patch(circle)
         ax.add_patch(rect)
+
+        # TODO: replot, and trail too
+        fmt = lambda x, _: '{:.2f}'.format(x)
+        plt.colorbar(mbp, format=FuncFormatter(fmt))
 
     def reset(self):
         self.heading = np.random.uniform(*self.range)

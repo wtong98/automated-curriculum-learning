@@ -248,7 +248,7 @@ if __name__ == '__main__':
                 case.cb_params['save_path'] += f'/{i}'
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000) 
-            traj = [t[0] for t in traj]
+            # traj = [t[0] for t in traj]
             case.runs.append(traj)
         
     df = pd.DataFrame(cases)
