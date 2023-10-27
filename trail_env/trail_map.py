@@ -269,7 +269,7 @@ class MeanderTrail(TrailMap):
             ax = plt.gca()
 
         ax.plot(self.x_coords, self.y_coords, linewidth=1.5, color='red', alpha=0.5)
-        ax.contourf(x, y, odors, cmap='Greens', alpha=0.3)
+        mbp = ax.contourf(x, y, odors, cmap='Greens', alpha=0.3)
 
         circle = plt.Circle((self.x_coords[0], self.y_coords[0]), radius=1, color='blue', zorder=100, alpha=0.7)
 
@@ -286,6 +286,8 @@ class MeanderTrail(TrailMap):
         rect = plt.Rectangle(root, 3, 3, color='darkmagenta', fill=False)
 
         # ax.add_patch(circle)
+        fmt = lambda x, _: '{:.2f}'.format(x)
+        plt.colorbar(mbp, format=FuncFormatter(fmt), aspect=30)
         ax.add_patch(rect)
 
         
@@ -509,8 +511,8 @@ class PlumeTrail(TrailMap):
 
 if __name__ == '__main__':
     # TODO: prettify plume trail plotting
-    trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 0.3], length_scale=20, max_steps='auto')
-    # trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
+    # trail = PlumeTrail(heading=0, wind_speed=5, start_rate_range=[0.3, 0.3], length_scale=20, max_steps='auto')
+    trail = MeanderTrail(heading=0, length=200, width=5, reward_dist=-1)
     # trail.reset()
 
     trail.reset()
