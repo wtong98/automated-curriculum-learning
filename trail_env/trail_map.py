@@ -252,11 +252,11 @@ class MeanderTrail(TrailMap):
         return np.exp(- np.min(dist2) / self.width)
 
     
-    def plot(self, res=200, ax=None, x_lim=None, y_lim=None, auto_aspect=True):
+    def plot(self, res=200, ax=None, x_lim=None, y_lim=None, auto_aspect=True, margin=20, width=6, with_colorbar=True):
         if x_lim is None:
-            x_lim = np.min(self.x_coords) - 20, np.max(self.x_coords) + 20
+            x_lim = np.min(self.x_coords) - margin, np.max(self.x_coords) + margin
         if y_lim is None:
-            y_lim = np.min(self.y_coords) - 20, np.max(self.y_coords) + 20
+            y_lim = np.min(self.y_coords) - margin, np.max(self.y_coords) + margin
 
         x = np.linspace(*x_lim, res)
         y = np.linspace(*y_lim, res)
@@ -277,17 +277,19 @@ class MeanderTrail(TrailMap):
             fig = plt.gcf()
 
             ratio = (y_lim[1] - y_lim[0] + 40) / (x_lim[1] - x_lim[0] + 40)
-            height = 6 * ratio
+            height = width * ratio
 
-            fig.set_size_inches((6, height))
+            fig.set_size_inches((width, height))
             fig.tight_layout()
         
         root = self.x_coords[-1] - 1.5, self.y_coords[-1] - 1.5
         rect = plt.Rectangle(root, 3, 3, color='darkmagenta', fill=False)
 
         # ax.add_patch(circle)
-        fmt = lambda x, _: '{:.2f}'.format(x)
-        plt.colorbar(mbp, format=FuncFormatter(fmt), aspect=30)
+        if with_colorbar:
+            fmt = lambda x, _: '{:.2f}'.format(x)
+            cb = plt.colorbar(mbp, format=FuncFormatter(fmt), aspect=30)
+            cb.ax.tick_params(labelsize=20)
         ax.add_patch(rect)
 
         
@@ -450,7 +452,7 @@ class PlumeTrail(TrailMap):
             samp = np.random.poisson(rate) / 50  # TODO: or binary?
             return samp.item()
 
-    def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-60, 10), auto_aspect=True):
+    def plot(self, ax=None, x_lim=(-30, 30), y_lim=(-60, 10), auto_aspect=True, with_colorbar=True):
         # if x_lim is None:
         #     x_lim = np.min(self.x_coords) - 20, np.max(self.x_coords) + 20
         # if y_lim is None:
@@ -473,11 +475,10 @@ class PlumeTrail(TrailMap):
             fig.tight_layout()
         
         lvls = 1 / np.linspace(15, 0.05, 18)
-        print('LVLS', lvls)
         if ax is None:
             ax = plt.gca()
 
-        ax.plot(*self.start, marker='o', markersize=5, color='black')
+        # ax.plot(*self.start, marker='o', markersize=5, color='black')
         mbp = ax.contourf(x, y, odors_contours, levels=lvls, cmap='Greens', alpha=0.7, norm=colors.LogNorm(vmin=min(lvls), vmax=max(lvls)))
         # ax.contourf(x, y, odors_contours, cmap='viridis', alpha=1)
         # ax.contour(x, y, odors_contours, cmap='Reds', alpha=0.5, levels=lvls)
@@ -487,9 +488,10 @@ class PlumeTrail(TrailMap):
         ax.add_patch(circle)
         ax.add_patch(rect)
 
-        # TODO: replot, and trail too
-        fmt = lambda x, _: '{:.2f}'.format(x)
-        plt.colorbar(mbp, format=FuncFormatter(fmt))
+        if with_colorbar:
+            fmt = lambda x, _: '{:.2f}'.format(x)
+            cb = plt.colorbar(mbp, format=FuncFormatter(fmt))
+            cb.ax.tick_params(labelsize=16)
 
     def reset(self):
         self.heading = np.random.uniform(*self.range)
