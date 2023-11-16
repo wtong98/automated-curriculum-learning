@@ -164,7 +164,6 @@ class TrainingTrailSet(TrailMap):  # TODO: test
         self.curr_trail = self._get_rand_trail()
 
 
-# TODO: scale length with max_steps <-- IMPORTANT
 class MeanderTrail(TrailMap):
     def __init__(self, length=50, 
                        width=3, 
