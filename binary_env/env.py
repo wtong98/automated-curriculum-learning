@@ -6,15 +6,10 @@ author: William Tong (wtong@g.harvard.edu)
 # <codecell>
 from collections import defaultdict
 import itertools
-from multiprocessing import Pool
 import numbers
-import warnings
 
 import gym
-import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import beta
-from sklearn.metrics.pairwise import rbf_kernel
 from tqdm import tqdm
 
 
