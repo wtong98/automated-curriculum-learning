@@ -2,11 +2,9 @@
 Common utils useful for making these plots
 """
 
-# <codecell>
 from dataclasses import dataclass, field
 from typing import Callable
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import linregress
@@ -36,46 +34,7 @@ def run_exp(n_iters, cases, use_tqdm=False, **global_kwargs):
             case.info.append(info)
 
 
-def plot_traj_and_qr(traj, qr, eps, N, n_step=1, ax=None, save_path=None):
-    if type(ax) == type(None):
-        plt.clf()
-        plt.gcf().set_size_inches(8, 3)
-        ax = plt.gca()
-
-    qr = np.array(qr)
-    qr = np.flip(qr.T, axis=0) + eps
-    im = ax.imshow(qr, aspect='auto', vmin=0, vmax=10)
-
-    ticks = np.arange(N) * n_step
-    ax.set_yticks(ticks, np.flip(np.arange(N) + 1))
-    ax.set_ylabel('N')
-    ax.set_xlabel('Steps')
-    ax.set_title(fr'$\epsilon = {eps}$')
-
-    plt.colorbar(im, ax=ax)
-
-    adj = -0.425 if n_step == 1 else 2.75
-    ax.plot(10 * n_step - np.array(traj)[1:] + adj, color='red')
-    ax.set_xlim((0, len(traj) - 1.5))
-
-    plt.gcf().tight_layout()
-
-    if save_path:
-        plt.savefig(save_path)
-
-def plot_traj_slices(qr, ax, eps, n_steps=1):
-    qr = np.array(qr) + eps
-
-    cmap = mpl.colormaps['plasma']
-
-    for i in [0, 2, 4, 7, 9]:
-        ax.plot(qr[:,i*n_steps + n_steps - 1], label=f'N = {i+1}', color=cmap(i/13), alpha=0.6)
-
-    ax.set_xlabel('Step')
-    ax.set_ylabel(r'Q value')
-    ax.legend()
-
-def run_exp_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
+def run_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
     teacher = TeacherExpIncremental(**teacher_kwargs)
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, return_transcript=True)
     traj = [env.N]
@@ -98,8 +57,6 @@ def run_exp_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwar
 
 
 def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):
-    global agent
-
     agent = TeacherPomcpAgentClean(goal_length=goal_length, 
                             T=T, bins=10, p_eps=0.05, gamma=gamma, 
                             n_particles=n_iters, q_reinv_prob=0.25)
@@ -129,7 +86,6 @@ def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_st
     return traj, {'qr': all_qr, 'teacher': agent}
 
 
-# <codecell>
 def plot_pomcp_diagnostics(info, eps):
     t = info['teacher']
     for i, (qs_true, qs, std) in enumerate(
@@ -151,7 +107,7 @@ def plot_pomcp_diagnostics(info, eps):
 
     plt.legend()
 
-# <codecell>
+
 def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     for i in range(max_retries):
         try:
@@ -163,8 +119,8 @@ def run_pomcp_with_retry(max_retries=5, max_steps=500, **kwargs):
     return [0] * max_steps, {}
 
 
-def run_adp_exp_disc(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
-    splits = [0.8, 0]   # TODO: optimize
+def run_adp(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
+    splits = [0.8, 0]
     dec_to_idx = [0, 1, 0, 2]
     tree = TeacherTree(splits)
     teacher = TeacherExpAdaptive(goal_length, tree, dec_to_idx, discrete=True)
@@ -380,8 +336,8 @@ def to_cont(N=3, eps=0, dn_per_interval=100):
 
     return N_cont, eps_cont
 
-# TODO: tune
-def run_exp_cont(eps=0, goal_length=3, n_step=100, T=3, lr=0.1, max_steps=500, **kwargs):
+
+def run_adp_cont(eps=0, goal_length=3, n_step=100, T=3, lr=0.1, max_steps=500, **kwargs):
     N, e = to_cont(N=goal_length, eps=eps, dn_per_interval=n_step)
 
     splits = np.array([0.7, 0])
@@ -409,6 +365,7 @@ def run_exp_cont(eps=0, goal_length=3, n_step=100, T=3, lr=0.1, max_steps=500, *
     
     return traj, {'qr': all_qr}
 
+
 def run_inc_cont(eps=0, T=3, goal_length=3, n_step=100, lr=0.1, max_steps=500, **teacher_kwargs):
     N, e = to_cont(N=goal_length, eps=eps, dn_per_interval=n_step)
 
@@ -435,10 +392,3 @@ def run_inc_cont(eps=0, T=3, goal_length=3, n_step=100, lr=0.1, max_steps=500, *
             break
     
     return traj, {'qr': all_qr, 'teacher': teacher}
-
-
-# traj, info = run_inc_cont(goal_length=10, eps=2)
-# plt.plot(traj)
-
-# traj, info = run_exp_cont(goal_length=10, eps=-2)
-# plt.plot(traj)
