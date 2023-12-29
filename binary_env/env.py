@@ -10,6 +10,7 @@ import numbers
 
 import gym
 import numpy as np
+from scipy.stats import beta
 from tqdm import tqdm
 
 
@@ -250,6 +251,68 @@ class TeacherExpIncremental(Agent):
         for x in trans:
             avg = (1 - self.discount) * x + self.discount * avg
         self.avgs.append(avg)
+
+
+class TeacherBetaIncremental(Agent):
+    def __init__(self, tau=0.95, conf=0.5, max_m_factor=3) -> None:
+        super().__init__()
+        self.tau = tau
+        self.conf = conf
+
+        self.all_trans = []
+        self.n = 1
+
+        p_eps = -np.log(tau)
+        raw_min_m = np.log(1 - conf) / (-p_eps) - 1
+        self.min_m = int(np.floor(raw_min_m))
+        self.max_m = int(self.min_m * max_m_factor)
+
+        self.avgs = []
+        self.bounds = []
+
+    def next_action(self, state):
+        _, trans = state
+        self.all_trans.extend(trans)
+
+        if self.do_jump():
+            self.all_trans = []
+            return 2
+
+        return 1
+    
+    def do_jump(self):
+        max_k = 1 + min(self.max_m, len(self.all_trans))
+        do_jump = False
+        chosen_k = None
+
+        for k in range(self.min_m, max_k):
+            prob_good = self._get_prob_good(self.all_trans[-k:])
+            if prob_good >= self.conf:
+                do_jump = True
+                chosen_k = k
+        
+        if chosen_k == None:
+            chosen_k = self.min_m
+
+        samps = self.all_trans[-chosen_k:]
+        n_succ = np.sum(samps)
+        n_fail = len(samps) - n_succ
+
+        beta_mean = (n_succ + 1) / (len(samps) + 2)
+        beta_bounds = beta.ppf((0.025, 0.25, 0.75, 0.975), a=n_succ+1, b=n_fail+1)
+
+        self.avgs.append(beta_mean)
+        self.bounds.append(beta_bounds)
+        return do_jump
+    
+    def _get_prob_good(self, transcript, tau=None):
+        if tau == None:
+            tau = self.tau
+
+        success = np.sum(transcript)
+        total = len(transcript)
+        prob_bad = beta.cdf(tau, a=success+1, b=total-success+1)
+        return 1 - prob_bad
 
 
 class TeacherExpAdaptive(Agent):

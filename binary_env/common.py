@@ -1,5 +1,7 @@
 """
 Common utils useful for making these plots
+
+author: William Tong (wtong@g.harvard.edu)
 """
 
 from dataclasses import dataclass, field
@@ -54,6 +56,61 @@ def run_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
             break
     
     return traj, {'qr': all_qr, 'teacher': teacher}
+
+
+def run_beta_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
+    teacher = TeacherBetaIncremental(**teacher_kwargs)
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, return_transcript=True)
+    traj = []
+    env.reset()
+    all_qr = []
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = [env.student.q_r[i] for i in range(goal_length)]
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr, 'teacher': teacher}
+
+
+def run_particle_inc(eps=0, goal_length=3, T=3, lr=0.1, max_steps=500, **teacher_kwargs):
+    teacher = TeacherParticleIncremental(goal_length=goal_length, T=T, lr=lr, **teacher_kwargs)
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, return_transcript=True)
+    traj = []
+    env.reset()
+    all_qr = []
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = [env.student.q_r[i] for i in range(goal_length)]
+        all_qr.append(qr)
+
+        if is_done:
+            break
+    
+    return traj, {'qr': all_qr, 'eps': eps, 'teacher': teacher}
+
+
+def run_particle_inc_with_retry(max_retries=5, max_steps=500, **kwargs):
+    for i in range(max_retries):
+        try:
+            return run_particle_inc(max_steps=max_steps, **kwargs)
+        except Exception as e:
+            print('pomcp failure', i+1)
+            print(e)
+    
+    return [0] * max_steps, {}
 
 
 def run_pomcp(n_iters=5000, eps=0, goal_length=3, T=3, gamma=0.9, lr=0.1, max_steps=500):

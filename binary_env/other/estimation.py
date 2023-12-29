@@ -1,5 +1,7 @@
 """
-Project files for BDA
+Testing different estimation procedures that the teacher may use to gauge the
+student's performance. This file is formatted as a Hydrogen notebook, but
+may be run as a simple Python script.
 
 author: William Tong (wtong@g.harvard.edu)
 """
@@ -9,6 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+import sys
+sys.path.append('../')
 
 from common import *
 from env import *
@@ -42,19 +47,16 @@ g = 0.8
 fig, axs = plt.subplots(1, 3, figsize=(12, 2.5))
 
 for e, ax in zip(eps, axs):
-    traj, info = run_exp_inc(eps=e, goal_length=N, discount=g)
+    traj, info = run_inc(eps=e, goal_length=N, discount=g)
     plot_prediction_vs_true(traj, info, e, ax, x_lim=200)
     ax.set_title(fr'$\varepsilon={e}$', fontsize=20)
     
 fig.tight_layout()
-plt.savefig('fig/ema_estimate.svg')
+plt.savefig('../fig/ema_estimate.svg')
 plt.show()
 
 
 # <codecell>
-
-np.random.seed(0)
-
 N = 10
 eps = [-2, 0, 2]
 
@@ -66,12 +68,10 @@ for e, ax in zip(eps, axs):
     ax.set_title(fr'$\varepsilon={e}$', fontsize=20)
     
 fig.tight_layout()
-plt.savefig('fig/beta_estimate.svg')
+plt.savefig('../fig/beta_estimate.svg')
 plt.show()
 
 # <codecell>
-np.random.seed(2)
-
 N = 10
 eps = [-2, 0, 2]
 
@@ -79,13 +79,13 @@ fig, axs = plt.subplots(1, 3, figsize=(12, 2.5))
 all_info = []
 
 for e, ax in zip(eps, axs):
-    traj, info = run_particle_inc(eps=e, goal_length=N)
+    traj, info = run_particle_inc_with_retry(eps=e, goal_length=N)
     plot_prediction_vs_true(traj, info, e, ax, x_lim=200) # TODO: rerun and paste
     ax.set_title(fr'$\varepsilon={e}$', fontsize=20)
     all_info.append(info)
     
 fig.tight_layout()
-plt.savefig('fig/particle_estimate.svg')
+plt.savefig('../fig/particle_estimate.svg')
 
 # <codecell>
 def plot_particle_diagnostics(info, true_eps, ax, x_lim=200):
@@ -128,10 +128,9 @@ for info, e, ax in zip(all_info, eps, axs):
     plot_particle_diagnostics(info, e, ax)
 
 fig.tight_layout()
-plt.savefig('fig/particle_diagnostics.svg')
+plt.savefig('../fig/particle_diagnostics.svg')
 
 # <codecell>
-
 ### BENCHMARKS
 n_iters = 10
 Ns = [10]
@@ -146,11 +145,11 @@ for N in Ns:
     print('RUNNING', N)
     for e in tqdm(eps):
         cases = [
-            Case('EMA', run_exp_inc, {'eps': e, 'goal_length': N}, []),
+            Case('EMA', run_inc, {'eps': e, 'goal_length': N}, []),
             Case('Beta', run_beta_inc, {'eps': e, 'goal_length': N}, []),
             Case('Particle', run_particle_inc_with_retry, {'eps': e, 'goal_length': N}, []),
             Case('Random', run_random, {'eps': e, 'goal_length': N}, []),
-            # Case('Final', run_final_task_only, {'eps': e, 'goal_length': N}, []),
+            Case('Final', run_final_task_only, {'eps': e, 'goal_length': N}, []),
         ]
 
         run_exp(n_iters=n_iters, cases=cases, max_steps=N * 100, lr=lr, T=T)
@@ -159,11 +158,10 @@ for N in Ns:
 df = pd.DataFrame(raw_data)
 
 # <codecell>
-# from cached POMCP database
-df_pomcp = pd.read_pickle('pomcp.pkl')
+df_pomcp = pd.read_pickle('../pomcp.pkl')   # from cached POMCP database
 df = pd.concat((df_pomcp, df), ignore_index=True)
-# <codecell>
 
+# <codecell>
 def extract_plot_vals(row):
     traj_lens = [len(traj) for traj in row['runs']]
 
@@ -195,14 +193,3 @@ g.spines['left'].set_linewidth(1.25)
 plt.gcf().tight_layout()
 plt.savefig(f'fig/comparison.svg')
 plt.show()
-
-# plt.savefig('fig/comparison.png')
-
-# row = df.loc[6]
-# plot_pomcp_diagnostics(row['info'][2], row['run_params']['eps'])
-# plt.xlabel('Steps')
-# plt.ylabel('Q-values')
-
-# plt.tight_layout()
-# plt.savefig('fig/pomcp_diagnostic.png')
-# %%
