@@ -1,5 +1,5 @@
 """
-Platform for tuning hyperparameters of various algorithms
+Hyperparameter tuning for the algorithms described in Mattiisen et al.
 
 author: William Tong (wtong@g.harvard.edu)
 """
@@ -11,10 +11,13 @@ from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 
-from experiment import *
+import sys
+sys.path.append('../')
+from common import *
 
 # <codecell>
 
+# set to the maximum number of threads your processor can run
 n_procs = 48
 
 eps = [-2, -1, 0, 1, 2]
@@ -22,12 +25,6 @@ Ns = [3, 5, 10]
 alphas = np.linspace(0, 1, num=20)
 betas = 10 ** np.linspace(-1, 1, num=20)
 ks = [1, 3, 5, 10, 20, 50]
-
-# eps = [0, 1, 2]
-# Ns = [3]
-# alphas = np.linspace(0, 1, num=5)
-# betas = 10 ** np.linspace(-1, 1, num=5)
-# ks = [1, 3, 5]
 
 def run(f, iters=3, **params):
     try:
@@ -88,16 +85,3 @@ if __name__ == '__main__':
     df = pd.DataFrame(cases)
     df.to_pickle('matiisen_params.pkl')
     print('done!')
-
-
-# %%
-# df = pd.read_pickle('remote/matiisen_params.pkl')
-# df = df.drop('f', axis=1)
-# df.loc[3]['best_params']['k'] = 1
-# del df.loc[3]['best_params']['beta']
-
-# df.to_pickle('remote/matiisen_params_clean.pkl')
-
-# <codecell>
-df = pd.read_pickle('remote/matiisen_params_clean.pkl')
-df
