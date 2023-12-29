@@ -133,7 +133,6 @@ plt.savefig('fig/particle_diagnostics.svg')
 # <codecell>
 
 ### BENCHMARKS
-# TODO: complete final benchmark plot <-- STOPPED HERE
 n_iters = 10
 Ns = [10]
 eps = np.linspace(-1, 1, num=3)
