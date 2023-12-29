@@ -1,5 +1,8 @@
 """
 Hyperparameter tuning for the algorithms described in Mattiisen et al.
+This script takes a long time to run, and is accelerated by using more
+threads, so it is highly recommended to run it on a high performance compute
+cluster.
 
 author: William Tong (wtong@g.harvard.edu)
 """
@@ -16,7 +19,6 @@ sys.path.append('../')
 from common import *
 
 # <codecell>
-
 # set to the maximum number of threads your processor can run
 n_procs = 48
 
