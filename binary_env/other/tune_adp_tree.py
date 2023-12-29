@@ -1,9 +1,10 @@
 """
-Example implementations using differential evolution to identify an
-optimal decision tree for the Adaptive teacher, in discrete and continuous
-sequence settings. Depending on the configuration, these search procedures may
-take a great deal of time to run, so it is recommended to run these on a
-compute cluster or a local machine you can leave alone for a long period of time.
+Example implementations using differential evolution to identify an optimal
+decision tree for the Adaptive teacher (with reduced search times), in discrete
+and continuous sequence settings. Depending on the configuration, these search
+procedures may take a great deal of time to run, so it is recommended to run
+these on a compute cluster or a local machine you can leave alone for a long
+period of time.
 
 author: William Tong (wtong@g.harvard.edu)
 """
