@@ -1,8 +1,11 @@
 """
-POMCP-specific benchmarks
+Dedicated script for producing POMCP runs. This script should ideally be
+executed on a high-performance compute cluster, or a local machine that can
+be left alone for a prolonged period.
+
+author: William Tong (wtong@g.harvard.edu)
 """
 
-# <codecell>
 import sys
 sys.path.append('../')
 
@@ -16,9 +19,6 @@ n_procs = 16
 n_iters = 3
 Ns = [3, 5, 10]
 eps = np.linspace(-2, 2, num=5)
-# n_iters = 1
-# Ns = [3]
-# eps = [2]
 
 T = 3
 lr = 0.1
