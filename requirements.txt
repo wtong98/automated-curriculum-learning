@@ -4,3 +4,5 @@ pandas
 seaborn
 tqdm
 jupyter
+stable-baselines3
+torch
