@@ -1,16 +1,14 @@
 """
-Benchmark performance of various teacher strategies
+Benchmarking teacher strategies on the trail tracking task. This script is
+designed to be run with multiple parallel replications on a compute cluster.
 
 author: William Tong (wtong@g.harvard.edu)
 """
-# <codecell>
-import os
+
 from dataclasses import dataclass, field
 from pathlib import Path
-import shutil
 
 from typing import Callable
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from stable_baselines3 import PPO
@@ -23,7 +21,6 @@ sys.path.append('../')
 
 from env import TrailEnv
 from curriculum import *
-from util import run_model, plot_run, plot_observations
 
 def make_model(env):
     return PPO("CnnPolicy", env, verbose=1,
@@ -47,8 +44,6 @@ def make_model(env):
 
 def run_session(student, teacher, eval_env, cb_params, max_steps=3000000):
     student.learn(total_timesteps=max_steps, 
-                #   eval_env=eval_env, 
-                #   eval_freq=512, 
                   callback=[CurriculumCallback(teacher, eval_env=eval_env, **cb_params)])
     return teacher.trajectory
 
@@ -69,71 +64,8 @@ def to_sched(len_sched, break_sched):
     sched = [dict(length=l, breaks=b, **trail_args) for l, b in zip(len_sched, break_sched)]
     return sched
 
-def to_sched_cont():
-    trail_args = {
-        'width': 5,
-        'diff_rate': 0.02,
-        'radius': 70,
-        'reward_dist': -1,
-        'range': (-np.pi, np.pi)
-    }
-
-    def sched(x):
-        return dict(length=x, breaks=[(0.5, 0.6)], **trail_args)
-    
-    return sched
-
 def logit(x):
     return np.log(x / (1 - x))
-
-class EstimateQValCallback:
-    def __init__(self, sched: list, trail_class=MeanderTrail, n_tests=10) -> None:
-        self.sched = sched
-        self.trail_class = trail_class
-        self.probs = []
-        self.n_tests = n_tests
-
-    def __call__(self, cb: CurriculumCallback):
-        prob_succ = [1]
-        prob = 1
-        for args in tqdm(self.sched):
-            if prob != 0:
-                prob = self._test_student(cb.teacher.student, args)
-            else:
-                print('warn: zero prob, skipping')
-
-            prob_succ.append(prob)
-
-        # prob_succ = np.array([1] + [self._test_student(cb.teacher.student, args) for args in tqdm(self.sched)])
-        prob_succ = np.array(prob_succ)
-        print('PROBS', prob_succ)
-
-        ratios = prob_succ[1:] / prob_succ[:-1]
-        print('RATIOS', ratios)
-
-        qs = logit(ratios)
-        print('QS', qs)
-
-        self.probs.append(ratios)
-
-
-    def _test_student(self, student, trail_args):
-        total_success = 0
-        env = TrailEnv(self.trail_class(**trail_args))
-
-        for _ in range(self.n_tests):
-            is_done = False
-            obs = env.reset()
-            while not is_done:
-                action, _ = student.predict(obs, deterministic=True)
-                obs, _, is_done, info = env.step(action)
-                is_success = info['is_success']
-            
-            if is_success:
-                total_success += 1
-        
-        return total_success / self.n_tests
-
 
 @dataclass
 class Case:
@@ -145,10 +77,6 @@ class Case:
 
 if __name__ == '__main__':
     save_dir = Path('trail_runs')
-    
-    scratch_dir = os.getenv('SCRATCH')
-    if scratch_dir:
-        save_dir = Path(scratch_dir) / 'pehlevan_lab' / 'Lab' / 'wlt' / 'acl' / save_dir
 
     if not save_dir.exists():
         save_dir.mkdir(exist_ok=True, parents=True)
@@ -158,61 +86,20 @@ if __name__ == '__main__':
     print('RUN ID', run_id)
 
     n_runs = 1
-    # sched = make_break_sched(8, start_len=80, end_len=160, inc=0.02)
     sched = [
-        # (5, []),
-        # (10, []),
-        # (15, []),
-        
         (10, [(0.5, 0.6)]),
         (30, [(0.5, 0.6)]),
         (50, [(0.5, 0.6)]),
         (70, [(0.5, 0.6)]),
         (90, [(0.5, 0.6)]),
         (100, [(0.5, 0.63)]),
-        # (100, [(0.5, 0.66)]),
-
-        # (110, [(0.5, 0.6)]),
-        # (85, [(0.5, 0.6)]),
-
-        # (10, [(0.5, 0.6)]),
-        # (20, [(0.5, 0.6)]),
-        # (30, [(0.5, 0.6)]),
-        # (40, [(0.5, 0.6)]),
-        # (50, [(0.5, 0.6)]),
-        # (60, [(0.5, 0.6)]),
-        # (60, [(0.5, 0.61)]),
-        # (70, [(0.5, 0.6)]),
-        # (70, [(0.5, 0.61)]),
-        # (80, [(0.5, 0.6)]),
-
-
-        # (80, [(0.5, 0.61)]),
-        # (90, [(0.5, 0.6)]),
-        # (90, [(0.5, 0.61)]),
-        # (100, [(0.5, 0.6)]),
-        # (110, [(0.5, 0.6)]),
-        # (120, [(0.5, 0.6)]),
-        # (120, [(0.5, 0.61)]),
-        # (120, [(0.5, 0.62)]),
-        # (120, [(0.5, 0.63)]),
-        # (120, [(0.5, 0.64)]),
-        # (120, [(0.5, 0.65)]),
-        # (120, [(0.5, 0.66)]),
-        # (120, [(0.5, 0.67)]),
-        # (120, [(0.5, 0.68)]),
-        # (120, [(0.5, 0.69)]),
-        # (120, [(0.5, 0.7)]),
     ]
+
     sched = to_sched(*zip(*sched))
-    # sched = to_sched_cont()
 
     def env_fn(): return TrailEnv(None)
     env = SubprocVecEnv([env_fn for _ in range(8)])
     eval_env = SubprocVecEnv([env_fn for _ in range(4)])
-
-    inc_est_q_callback = EstimateQValCallback(sched=sched)
-    adp_est_q_callback = EstimateQValCallback(sched=sched)
 
     discount = 0.975
     n_iters_per_ckpt = 3 * 1024
@@ -220,19 +107,7 @@ if __name__ == '__main__':
     
     save_every=1
     cases = [
-        # Case('Adaptive (Osc)', AdaptiveOscTeacher, {'conf':0.5}),
-
-        # Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'decision_point': 0.675, 'noise_range': 0.025, 'discount': discount}, cb_params={
-        #     # 'next_lesson_callbacks': [adp_est_q_callback]
-        # }),
-
-        # Case('Incremental', IncrementalTeacher, teacher_params={'decision_point': 0.7, 'discount': discount}, cb_params={
-        #     # 'next_lesson_callbacks': [inc_est_q_callback]
-        # }),
-        # Case('Random', RandomTeacher),
-        # # Case('Final', FinalTaskTeacher),
-
-        Case('Adaptive (Exp)', AdaptiveExpTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/adp/{run_id}'}),
+        Case('Adaptive', AdaptiveTeacher, teacher_params={'discount': discount, 'decision_point': 0.675, 'noise_range': 0.025, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/adp/{run_id}'}),
         Case('Incremental', IncrementalTeacher, teacher_params={'discount': discount, 'decision_point': 0.7, 'aggressive_checking': False}, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/inc/{run_id}'}),
         Case('Random', RandomTeacher, cb_params={'save_every': save_every, 'save_path': f'{save_dir}/trained/rand/{run_id}'}),
     ]
@@ -242,159 +117,12 @@ if __name__ == '__main__':
             print('RUNNING', case.name)
             teacher = case.teacher(sched=sched, tau=tau, n_iters_per_ckpt=n_iters_per_ckpt, **case.teacher_params)
             model = make_model(env)
-            # model = PPO.load('trained/osc_break/0/gen93')
             model.set_env(env)
             if 'save_path' in case.cb_params:
                 case.cb_params['save_path'] += f'/{i}'
 
             traj = run_session(model, teacher, eval_env, case.cb_params, max_steps=2_000_000) 
-            # traj = [t[0] for t in traj]
             case.runs.append(traj)
         
     df = pd.DataFrame(cases)
     df.to_pickle(save_dir / f'meander_results_{run_id}.pkl')
-
-    # inc_probs = np.array(inc_est_q_callback.probs)
-    # np.save('meander_inc_probs.npy', inc_probs)
-
-    # adp_probs = np.array(adp_est_q_callback.probs)
-    # np.save('meander_adp_probs.npy', adp_probs)
-
-
-# %%  SHOWCASE PERFORMANCE IN PLOTS
-'''
-save_path = Path('trained/adp/0/')
-max_gen = 68
-
-# trail_args = {
-#     'length': 80,
-#     'width': 5,
-#     'diff_rate': 0.01,
-#     'radius': 100,
-#     'reward_dist': -1,
-#     'range': (-np.pi, np.pi)
-# }
-trail_args = sched(120)
-
-for i in tqdm(range(1, max_gen + 1)):
-    model_path = save_path / f'gen{i}'
-    # print('loading model')
-    model = PPO.load(model_path, device='cpu')
-
-    n_runs = 8
-    headings = np.linspace(-np.pi, np.pi, num=n_runs)
-
-    maps = []
-    position_hists = []
-
-    # print('preparing to generate headings')
-    for heading in headings:
-        trail_map = MeanderTrail(**trail_args, heading=heading)
-        env = TrailEnv(trail_map, discrete=True, treadmill=True)
-
-        obs = env.reset()
-        for _ in range(100):
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, is_done, _ = env.step(action)
-
-            if is_done:
-                break
-        
-        # print('gen heading')
-        maps.append(trail_map)
-        position_hists.append(env.agent.position_history)
-
-    fig, axs = plt.subplots(2, 4, figsize=(16, 8))
-
-    for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
-        m.plot(ax=ax)
-        ax.plot(*zip(*position_history), linewidth=2, color='black')
-
-    fig.suptitle('Sample of agent runs')
-    fig.tight_layout()
-    plt.savefig(save_path / f'gen{i}.png')
-    plt.clf()
-
-
-# <codecell> SINGLE PROBE
-model_path = Path('trained/osc_break_ii/0/gen172.zip')
-
-# trail_args = {
-#     'length': 160,
-#     'width': 5,
-#     'diff_rate': 0.01,
-#     'radius': 100,
-#     'reward_dist': -1,
-#     'range': (-np.pi, np.pi),
-#     'breaks':[(0.5, 0.53)]
-# }
-trail_args = sched(120)
-
-model = PPO.load(model_path, device='cpu')
-
-n_runs = 8
-headings = np.linspace(-np.pi, np.pi, num=n_runs)
-
-maps = []
-position_hists = []
-
-# print('preparing to generate headings')
-for heading in headings:
-    trail_map = MeanderTrail(**trail_args, heading=heading)
-    env = TrailEnv(trail_map, discrete=True, treadmill=True)
-
-    obs = env.reset()
-    for _ in range(200):
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, is_done, _ = env.step(action)
-
-        if is_done:
-            break
-    
-    # print('gen heading')
-    maps.append(trail_map)
-    position_hists.append(env.agent.position_history)
-
-fig, axs = plt.subplots(2, 4, figsize=(16, 8))
-
-for ax, m, position_history in zip(axs.ravel(), maps, position_hists):
-    m.plot(ax=ax)
-    ax.plot(*zip(*position_history), linewidth=2, color='black')
-
-fig.suptitle('Sample of agent runs')
-fig.tight_layout()
-plt.savefig('tmp.png')
-# %%
-# MANY LONG PLOTS
-
-# model_path = Path('trained/osc_break_ii/0/gen172.zip')
-model_path = Path('trained/remote/meander_gold.zip')
-
-trail_args = {
-    'width': 5,
-    'diff_rate': 0.02,
-    'radius': 70,
-    'reward_dist': -1,
-    'range': (-np.pi, np.pi)
-}
-trail_args['length'] = 500
-trail_args['breaks'] = [(0.3, 0.32), (0.5, 0.53), (0.7, 0.72)]
-
-n_samps = 5
-
-path = Path(f'trail_examples/')
-if not path.exists():
-    path.mkdir()
-
-for i in tqdm(range(n_samps)):
-    trail_map = MeanderTrail(**trail_args, heading=0)
-    trail_map.max_steps = 1000
-
-    pos_hist, info = run_model(model_path, trail_map)
-    plt.clf()
-    plot_run(trail_map, pos_hist, save_path=path / f'example_{i}.png')
-    plot_observations(info['obs'], path)
-
-
-# <codecell>
-'''
