@@ -1,10 +1,9 @@
 """
-Trail-tracking environment
+Deep RL Environments for the trail and plume tracking tasks.
 
 author: William Tong (wtong@g.harvard.edu)
 """
 
-# <codecell>
 from itertools import repeat
 from typing import Tuple
 
@@ -47,7 +46,6 @@ class TrailEnv(gym.Env):
         if self.discrete:
             self.action_space = spaces.Discrete(8)
             if self.treadmill:
-                # self.action_space = spaces.Box(low=-1, high=1, shape=(1,))
                 self.action_space = spaces.Discrete(3)
 
         else:
@@ -113,7 +111,6 @@ class TrailEnv(gym.Env):
         if self.next_map != None:
             self.map = self.next_map
             self.map.reset()   # NOTE: resample map parameters
-            # print('SWITCHING TO MAP:', self.map)
 
             self.next_map = None
             self.history = []
@@ -173,7 +170,6 @@ class TrailAgent:
         return odor
 
     def get_reward(self) -> Tuple[float, bool]:
-        # reward = 10 * (self.odor_history[-1][0] - self.odor_history[-2][0])
         reward = 0
         is_success = False
 
@@ -268,20 +264,3 @@ class TrailAgent:
         plt.plot(*self.position, 'ro')
         plt.show()
 
-
-if __name__ == '__main__':
-    trail = RoundTrail()
-    agent = TrailAgent(trail, 20)
-    agent.sniff()
-    agent.move_direct(3, -5)
-    agent.sniff()
-    agent.move_direct(3, -5)
-    agent.sniff()
-    agent.move_direct(3, -5)
-    agent.sniff()
-
-    agent.heading = np.pi/2
-    # agent.is_egocentric = False
-
-    obs = agent.make_observation()
-    plt.imshow(obs / np.max(obs))
