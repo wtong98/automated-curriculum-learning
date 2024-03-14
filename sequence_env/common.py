@@ -3,6 +3,7 @@ Common utils useful for making these plots
 
 author: William Tong (wtong@g.harvard.edu)
 """
+# <codecell>
 
 from dataclasses import dataclass, field
 from typing import Callable
@@ -183,6 +184,29 @@ def run_adp(eps=0, goal_length=3, T=3, max_steps=500, lr=0.1):
     teacher = TeacherExpAdaptive(goal_length, tree, dec_to_idx, discrete=True)
 
     env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, anarchy_mode=True, return_transcript=True)
+    traj = [env.N]
+    all_qr = []
+    env.reset()
+
+    obs = (1, [])
+    for _ in range(max_steps):
+        action = teacher.next_action(obs)
+        obs, _, is_done, _ = env.step(action)
+        traj.append(env.N)
+
+        qr = [env.student.q_r[i] for i in range(goal_length)]
+        all_qr.append(qr)
+
+        if is_done:
+            break
+
+    return traj, {'qr': all_qr}
+
+
+def run_thr(eps=0, goal_length=3, T=3, sr=0.8, max_steps=500, lr=0.1):
+    teacher = TeacherExpThreshold(goal_length, target_success_rate=sr)
+
+    env = CurriculumEnv(goal_length=goal_length, student_reward=10, student_qe_dist=eps, train_iter=999, train_round=T, student_params={'lr': lr}, return_transcript=True)
     traj = [env.N]
     all_qr = []
     env.reset()

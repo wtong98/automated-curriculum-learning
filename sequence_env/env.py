@@ -395,6 +395,33 @@ class TeacherTree:
         return result
 
 
+class TeacherExpThreshold(Agent):
+    def __init__(self, goal_length, target_success_rate=0.8, discount=0.8):
+        self.goal_length = goal_length
+        self.target_success_rate = target_success_rate
+
+        self.discount = discount
+        self.avgs = []
+    
+    def next_action(self, state):
+        curr_n, trans = state
+        self._consume_trans(trans)
+
+        if len(self.avgs) == 1:
+            return 1
+        
+        if self.avgs[-1] > self.target_success_rate:
+            return 2
+        else:
+            return 0
+    
+    def _consume_trans(self, trans):
+        avg = self.avgs[-1] if len(self.avgs) > 0 else 0
+        for x in trans:
+            avg = (1 - self.discount) * x + self.discount * avg
+        self.avgs.append(avg)
+
+
 class TeacherParticleIncremental(Agent):
     def __init__(self, goal_length, n_particles=1000, conf=0.5, reinv_scale=0.5, tau=0.95, T=3, lr=0.1, student_reward=10) -> None:
         super().__init__()
