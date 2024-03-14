@@ -327,8 +327,6 @@ class AdaptiveTeacher(Teacher):
         self.avgs.append(avg)
         self.logger.record('trajectory/exp_avg', avg)
 
-# TODO: remove before end
-AdaptiveExpTeacher = AdaptiveTeacher
 
 class RandomTeacher(Teacher):
     def __init__(self, tau=0.95, **teacher_kwargs):

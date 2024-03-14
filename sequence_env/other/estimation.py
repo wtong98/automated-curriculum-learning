@@ -80,7 +80,7 @@ all_info = []
 
 for e, ax in zip(eps, axs):
     traj, info = run_particle_inc_with_retry(eps=e, goal_length=N)
-    plot_prediction_vs_true(traj, info, e, ax, x_lim=200) # TODO: rerun and paste
+    plot_prediction_vs_true(traj, info, e, ax, x_lim=200)
     ax.set_title(fr'$\varepsilon={e}$', fontsize=20)
     all_info.append(info)
     
